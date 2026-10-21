@@ -70,6 +70,16 @@ enum BackgroundGenerationWaitAudioFactory {
 }
 
 @MainActor
+protocol BackgroundGenerationAudioPlayback: AnyObject {
+    var isPlaying: Bool { get }
+    var volume: Float { get set }
+    var onPlaybackEnded: (@MainActor @Sendable (Bool) -> Void)? { get set }
+    func play() -> Bool
+    func pause()
+    func stop(resetPosition: Bool)
+}
+
+@MainActor
 public final class BackgroundGenerationAudioKeepAliveManager: ObservableObject {
     public static let shared = BackgroundGenerationAudioKeepAliveManager()
 
@@ -79,25 +89,42 @@ public final class BackgroundGenerationAudioKeepAliveManager: ObservableObject {
     @Published public private(set) var isPreviewing = false
     @Published public private(set) var hasPlaybackError = false
 
-    private let appConfig: AppConfigStore
-    private let ttsManager: TTSManager
+    private let featureEnabled: @MainActor () -> Bool
+    private let updateFeatureEnabled: @MainActor (Bool) -> Void
+    private let volume: @MainActor () -> Double
+    private let updateVolume: @MainActor (Double) -> Void
+    private let isSpeechActive: @MainActor () -> Bool
+    private let playerFactory: @MainActor (Data) throws -> any BackgroundGenerationAudioPlayback
+    private let activateSession: @MainActor () throws -> Void
+    private let deactivateSession: @MainActor () -> Void
     private var cancellables: Set<AnyCancellable> = []
     private var preparationTask: Task<Void, Never>?
+    private var preparationID: UUID?
+    private var playbackID: UUID?
     private var previewTask: Task<Void, Never>?
     private var ownsAudioSession = false
+    private var isInterrupted = false
+    private var mediaServicesAvailable = true
+    private var audioPlayer: (any BackgroundGenerationAudioPlayback)?
 
-#if canImport(AVFoundation)
-    private var audioPlayer: AVAudioPlayer?
-#endif
-
-    public init(
+    public convenience init(
         appConfig: AppConfigStore? = nil,
         ttsManager: TTSManager? = nil
     ) {
-        self.appConfig = appConfig ?? .shared
-        self.ttsManager = ttsManager ?? .shared
+        let appConfig = appConfig ?? .shared
+        let ttsManager = ttsManager ?? .shared
+        self.init(
+            featureEnabled: { appConfig.backgroundGenerationAudioKeepAliveEnabled },
+            updateFeatureEnabled: { appConfig.backgroundGenerationAudioKeepAliveEnabled = $0 },
+            volume: { appConfig.backgroundGenerationAudioKeepAliveVolume },
+            updateVolume: { appConfig.backgroundGenerationAudioKeepAliveVolume = $0 },
+            isSpeechActive: { ttsManager.isSpeaking },
+            playerFactory: Self.makePlayer,
+            activateSession: Self.activateAudioSession,
+            deactivateSession: Self.deactivateAudioSession
+        )
 
-        self.ttsManager.$isSpeaking
+        ttsManager.$isSpeaking
             .removeDuplicates()
             .sink { [weak self] _ in
                 Task { @MainActor [weak self] in
@@ -106,7 +133,7 @@ public final class BackgroundGenerationAudioKeepAliveManager: ObservableObject {
             }
             .store(in: &cancellables)
 
-        self.appConfig.$backgroundGenerationAudioKeepAliveEnabled
+        appConfig.$backgroundGenerationAudioKeepAliveEnabled
             .removeDuplicates()
             .sink { [weak self] _ in
                 Task { @MainActor [weak self] in
@@ -115,7 +142,7 @@ public final class BackgroundGenerationAudioKeepAliveManager: ObservableObject {
             }
             .store(in: &cancellables)
 
-        self.appConfig.$backgroundGenerationAudioKeepAliveVolume
+        appConfig.$backgroundGenerationAudioKeepAliveVolume
             .removeDuplicates()
             .sink { [weak self] volume in
                 Task { @MainActor [weak self] in
@@ -125,11 +152,64 @@ public final class BackgroundGenerationAudioKeepAliveManager: ObservableObject {
             .store(in: &cancellables)
     }
 
+    init(
+        featureEnabled: @escaping @MainActor () -> Bool,
+        updateFeatureEnabled: @escaping @MainActor (Bool) -> Void,
+        volume: @escaping @MainActor () -> Double,
+        updateVolume: @escaping @MainActor (Double) -> Void,
+        isSpeechActive: @escaping @MainActor () -> Bool,
+        playerFactory: @escaping @MainActor (Data) throws -> any BackgroundGenerationAudioPlayback,
+        activateSession: @escaping @MainActor () throws -> Void,
+        deactivateSession: @escaping @MainActor () -> Void,
+        notificationCenter: NotificationCenter = .default
+    ) {
+        self.featureEnabled = featureEnabled
+        self.updateFeatureEnabled = updateFeatureEnabled
+        self.volume = volume
+        self.updateVolume = updateVolume
+        self.isSpeechActive = isSpeechActive
+        self.playerFactory = playerFactory
+        self.activateSession = activateSession
+        self.deactivateSession = deactivateSession
+#if os(iOS) || os(watchOS)
+        notificationCenter.publisher(for: AVAudioSession.interruptionNotification)
+            .sink { [weak self] notification in
+                guard let rawType = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                      let type = AVAudioSession.InterruptionType(rawValue: rawType) else { return }
+                let options = AVAudioSession.InterruptionOptions(
+                    rawValue: notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
+                )
+                Task { @MainActor [weak self] in
+                    self?.handleInterruption(type, shouldResume: options.contains(.shouldResume))
+                }
+            }
+            .store(in: &cancellables)
+        notificationCenter.publisher(for: AVAudioSession.mediaServicesWereResetNotification)
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in self?.handleMediaServicesReset() }
+            }
+            .store(in: &cancellables)
+        notificationCenter.publisher(for: AVAudioSession.mediaServicesWereLostNotification)
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in self?.handleMediaServicesLost() }
+            }
+            .store(in: &cancellables)
+        notificationCenter.publisher(for: AVAudioSession.routeChangeNotification)
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self, self.isPlaying, self.audioPlayer?.isPlaying != true else { return }
+                    self.stopPlayback(resetPosition: false)
+                }
+            }
+            .store(in: &cancellables)
+#endif
+    }
+
     public func setFeatureEnabled(_ enabled: Bool) {
         if enabled {
             hasPlaybackError = false
         }
-        appConfig.backgroundGenerationAudioKeepAliveEnabled = enabled
+        updateFeatureEnabled(enabled)
         if enabled {
             preparePlayerIfNeeded()
             updatePlayback()
@@ -148,8 +228,7 @@ public final class BackgroundGenerationAudioKeepAliveManager: ObservableObject {
     }
 
     public func setVolume(_ volume: Double) {
-        appConfig.backgroundGenerationAudioKeepAliveVolume =
-            BackgroundGenerationAudioKeepAliveSettings.normalizedVolume(volume)
+        updateVolume(BackgroundGenerationAudioKeepAliveSettings.normalizedVolume(volume))
     }
 
     public func togglePreview() {
@@ -180,31 +259,30 @@ public final class BackgroundGenerationAudioKeepAliveManager: ObservableObject {
 
     private func updatePlayback() {
         let shouldPlay = isPreviewing
-            || (appConfig.backgroundGenerationAudioKeepAliveEnabled && isGenerationActive)
+            || (featureEnabled() && isGenerationActive)
 
         guard shouldPlay else {
             stopPlayback(resetPosition: true)
             return
         }
 
-        guard !ttsManager.isSpeaking else {
+        guard mediaServicesAvailable, !isInterrupted, !isSpeechActive() else {
             pauseForSpeech()
             return
         }
 
-#if canImport(AVFoundation)
         if audioPlayer == nil {
             guard !hasPlaybackError else { return }
             preparePlayerIfNeeded()
             return
         }
         startPlayback()
-#endif
     }
 
     private func preparePlayerIfNeeded() {
-#if canImport(AVFoundation)
-        guard preparationTask == nil else { return }
+        guard audioPlayer == nil, preparationTask == nil else { return }
+        let id = UUID()
+        preparationID = id
         isPreparing = true
         hasPlaybackError = false
 
@@ -212,89 +290,132 @@ public final class BackgroundGenerationAudioKeepAliveManager: ObservableObject {
             let data = await Task.detached(priority: .utility) {
                 BackgroundGenerationWaitAudioFactory.makeWAVData()
             }.value
-            guard let self, !Task.isCancelled else { return }
+            guard let self, !Task.isCancelled, self.preparationID == id else { return }
 
             do {
-                let player = try AVAudioPlayer(data: data)
-                player.numberOfLoops = -1
+                let player = try self.playerFactory(data)
                 player.volume = Float(
-                    BackgroundGenerationAudioKeepAliveSettings.normalizedVolume(
-                        self.appConfig.backgroundGenerationAudioKeepAliveVolume
-                    )
+                    BackgroundGenerationAudioKeepAliveSettings.normalizedVolume(self.volume())
                 )
-                player.prepareToPlay()
                 self.audioPlayer = player
             } catch {
                 self.hasPlaybackError = true
+                self.isPlaying = false
             }
 
             self.isPreparing = false
             self.preparationTask = nil
+            self.preparationID = nil
             self.updatePlayback()
         }
-#endif
     }
 
     private func startPlayback() {
-#if canImport(AVFoundation)
         guard let audioPlayer, !audioPlayer.isPlaying else {
             isPlaying = audioPlayer?.isPlaying == true
             return
         }
 
         do {
-            try activateAudioSession()
+            try activateSession()
+            ownsAudioSession = true
             audioPlayer.volume = Float(
-                BackgroundGenerationAudioKeepAliveSettings.normalizedVolume(
-                    appConfig.backgroundGenerationAudioKeepAliveVolume
-                )
+                BackgroundGenerationAudioKeepAliveSettings.normalizedVolume(volume())
             )
-            guard audioPlayer.play() else {
+            let id = UUID()
+            playbackID = id
+            audioPlayer.onPlaybackEnded = { [weak self] successful in
+                guard let self, self.playbackID == id else { return }
+                self.stopPlayback(resetPosition: true)
+                self.hasPlaybackError = !successful
+            }
+            guard audioPlayer.play(), audioPlayer.isPlaying else {
                 hasPlaybackError = true
-                deactivateAudioSessionIfNeeded()
+                stopPlayback(resetPosition: true)
                 return
             }
             hasPlaybackError = false
             isPlaying = true
         } catch {
             hasPlaybackError = true
-            isPlaying = false
-            deactivateAudioSessionIfNeeded()
+            stopPlayback(resetPosition: true)
         }
-#endif
     }
 
     private func stopPlayback(resetPosition: Bool) {
-#if canImport(AVFoundation)
-        if resetPosition {
-            audioPlayer?.stop()
-            audioPlayer?.currentTime = 0
-        } else {
-            audioPlayer?.pause()
-        }
-#endif
+        playbackID = nil
+        audioPlayer?.onPlaybackEnded = nil
+        audioPlayer?.stop(resetPosition: resetPosition)
         isPlaying = false
         deactivateAudioSessionIfNeeded()
     }
 
     private func pauseForSpeech() {
-#if canImport(AVFoundation)
+        playbackID = nil
+        audioPlayer?.onPlaybackEnded = nil
         audioPlayer?.pause()
-#endif
         isPlaying = false
         // 朗读会立即接管共享音频会话，此处只暂停播放器，不能关闭朗读刚激活的会话。
         ownsAudioSession = false
     }
 
     private func applyVolume(_ volume: Double) {
-#if canImport(AVFoundation)
         audioPlayer?.volume = Float(
             BackgroundGenerationAudioKeepAliveSettings.normalizedVolume(volume)
         )
+    }
+
+    func handleMediaServicesLost() {
+        mediaServicesAvailable = false
+        discardPlaybackForMediaServiceChange()
+    }
+
+    func handleMediaServicesReset() {
+        discardPlaybackForMediaServiceChange()
+        // Media-service loss is independent of an ongoing phone-call interruption.
+        mediaServicesAvailable = true
+        hasPlaybackError = false
+        updatePlayback()
+    }
+
+    private func discardPlaybackForMediaServiceChange() {
+        preparationTask?.cancel()
+        preparationTask = nil
+        preparationID = nil
+        isPreparing = false
+        playbackID = nil
+        audioPlayer?.onPlaybackEnded = nil
+        audioPlayer?.stop(resetPosition: true)
+        audioPlayer = nil
+        isPlaying = false
+        ownsAudioSession = false
+    }
+
+#if os(iOS) || os(watchOS)
+    func handleInterruption(_ type: AVAudioSession.InterruptionType, shouldResume: Bool) {
+        switch type {
+        case .began:
+            isInterrupted = true
+            pauseForSpeech()
+        case .ended:
+            isInterrupted = false
+            if shouldResume { updatePlayback() }
+        @unknown default:
+            isInterrupted = true
+            pauseForSpeech()
+        }
+    }
+#endif
+
+    private static func makePlayer(data: Data) throws -> any BackgroundGenerationAudioPlayback {
+#if canImport(AVFoundation)
+        return try BackgroundGenerationAudioPlayer(data: data)
+#else
+        throw CocoaError(.featureUnsupported)
 #endif
     }
 
-    private func activateAudioSession() throws {
+    private static func activateAudioSession() throws {
 #if os(iOS) || os(watchOS)
         let session = AVAudioSession.sharedInstance()
 #if os(watchOS)
@@ -308,18 +429,68 @@ public final class BackgroundGenerationAudioKeepAliveManager: ObservableObject {
         try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
 #endif
         try session.setActive(true)
-        ownsAudioSession = true
 #endif
     }
 
     private func deactivateAudioSessionIfNeeded() {
-#if os(iOS) || os(watchOS)
         guard ownsAudioSession else { return }
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        deactivateSession()
         ownsAudioSession = false
+    }
+
+    private static func deactivateAudioSession() {
+#if os(iOS) || os(watchOS)
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
 #endif
     }
 }
+
+#if canImport(AVFoundation)
+@MainActor
+private final class BackgroundGenerationAudioPlayer: BackgroundGenerationAudioPlayback {
+    private let player: AVAudioPlayer
+    private var delegate: BackgroundGenerationAudioPlayerDelegate?
+
+    init(data: Data) throws {
+        player = try AVAudioPlayer(data: data)
+        player.numberOfLoops = -1
+        guard player.prepareToPlay() else { throw CocoaError(.fileReadCorruptFile) }
+    }
+
+    var isPlaying: Bool { player.isPlaying }
+    var volume: Float {
+        get { player.volume }
+        set { player.volume = newValue }
+    }
+    var onPlaybackEnded: (@MainActor @Sendable (Bool) -> Void)? {
+        didSet {
+            if let onPlaybackEnded {
+                delegate = BackgroundGenerationAudioPlayerDelegate(onFinish: onPlaybackEnded)
+            } else {
+                delegate = nil
+            }
+            player.delegate = delegate
+        }
+    }
+    func play() -> Bool { player.play() }
+    func pause() { player.pause() }
+    func stop(resetPosition: Bool) {
+        if resetPosition { player.stop(); player.currentTime = 0 }
+        else { player.pause() }
+    }
+}
+
+private final class BackgroundGenerationAudioPlayerDelegate: NSObject, AVAudioPlayerDelegate {
+    private let onFinish: @MainActor @Sendable (Bool) -> Void
+    init(onFinish: @escaping @MainActor @Sendable (Bool) -> Void) { self.onFinish = onFinish }
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        Task { @MainActor [onFinish] in onFinish(flag) }
+    }
+    func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
+        Task { @MainActor [onFinish] in onFinish(false) }
+    }
+}
+#endif
 
 private extension Double {
     func clamped(to range: ClosedRange<Double>) -> Double {

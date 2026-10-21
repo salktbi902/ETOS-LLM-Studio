@@ -401,6 +401,7 @@ public enum AppConfigKey: String, CaseIterable, Sendable {
     case watchBackgroundSourceHistory = "watch.background.sourceHistory"
     case watchUseThirdPartyKeyboard = "watch.keyboard.useThirdPartyKeyboard"
     case localDebugLastServerAddress = "localDebug.lastServerAddress"
+    case localDebugKeepAliveInBackground = "localDebug.keepAliveInBackground"
     case settingsColorfulIconsEnabled = "ui.settingsColorfulIconsEnabled"
     case iOSModelPickerGroupsByProvider = "ui.modelPicker.groupByProvider.iOS"
     case watchModelPickerGroupsByProvider = "ui.modelPicker.groupByProvider.watchOS"
@@ -756,6 +757,8 @@ public enum AppConfigKey: String, CaseIterable, Sendable {
             return .bool(false)
         case .localDebugLastServerAddress:
             return .text("")
+        case .localDebugKeepAliveInBackground:
+            return .bool(false)
         case .settingsColorfulIconsEnabled:
             #if os(watchOS)
             return .bool(false)
@@ -871,6 +874,7 @@ public enum AppConfigKey: String, CaseIterable, Sendable {
              .watchUseThirdPartyKeyboard,
              .iOSHardwareKeyboardReturnSendsMessage,
              .localDebugLastServerAddress,
+             .localDebugKeepAliveInBackground,
              .iOSModelPickerExpandedGroupIDs,
              .watchModelPickerExpandedGroupIDs,
              .memoryAutoConsolidationState,

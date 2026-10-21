@@ -543,6 +543,9 @@ public final class AppConfigStore: ObservableObject {
     @Published public var backgroundGenerationAudioKeepAliveEnabled: Bool {
         didSet { write(.backgroundGenerationAudioKeepAliveEnabled, backgroundGenerationAudioKeepAliveEnabled) }
     }
+    @Published public var localDebugKeepAliveInBackground: Bool {
+        didSet { write(.localDebugKeepAliveInBackground, localDebugKeepAliveInBackground) }
+    }
     @Published public var backgroundGenerationAudioKeepAliveVolume: Double {
         didSet {
             let normalizedValue = BackgroundGenerationAudioKeepAliveSettings.normalizedVolume(
@@ -827,6 +830,7 @@ public final class AppConfigStore: ObservableObject {
         audioRecordingFormat = Self.textValue(.audioRecordingFormat, userDefaults: userDefaults)
         backgroundGenerationKeepAliveEnabled = Self.boolValue(.backgroundGenerationKeepAliveEnabled, userDefaults: userDefaults)
         backgroundGenerationAudioKeepAliveEnabled = Self.boolValue(.backgroundGenerationAudioKeepAliveEnabled, userDefaults: userDefaults)
+        localDebugKeepAliveInBackground = Self.boolValue(.localDebugKeepAliveInBackground, userDefaults: userDefaults)
         backgroundGenerationAudioKeepAliveVolume = BackgroundGenerationAudioKeepAliveSettings.normalizedVolume(
             Self.realValue(.backgroundGenerationAudioKeepAliveVolume, userDefaults: userDefaults)
         )

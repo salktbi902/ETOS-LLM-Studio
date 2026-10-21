@@ -14,6 +14,7 @@ public struct LocalDebugView: View {
     @StateObject private var server = LocalDebugServer()
     @StateObject private var discovery = LocalDebugServerDiscovery()
     @Environment(\.scenePhase) private var scenePhase
+    @State private var backgroundLease: ApplicationBackgroundTaskLease?
     @State private var showingDocs = false
     @State private var showingLogs = false
     @State private var serverURL: String = ""
@@ -58,6 +59,9 @@ public struct LocalDebugView: View {
             }
             .onDisappear {
                 discovery.stop()
+                if scenePhase == .active {
+                    endBackgroundLease()
+                }
             }
             .onChange(of: discovery.discoveredServers) { _, candidates in
                 promptForDiscoveredServerIfNeeded(candidates)
@@ -65,13 +69,25 @@ public struct LocalDebugView: View {
             .onChange(of: server.isRunning) { _, isRunning in
                 if isRunning {
                     discovery.stop()
-                } else {
+                } else if scenePhase == .active {
                     discovery.start()
                 }
             }
             .onChange(of: scenePhase) { _, newPhase in
-                if newPhase != .active && server.isRunning {
-                    disconnectServer()
+                switch newPhase {
+                case .background:
+                    discovery.stop()
+                    beginBackgroundLeaseIfNeeded()
+                case .active:
+                    endBackgroundLease()
+                    server.resumeIfNeeded()
+                    if !server.isRunning {
+                        discovery.start()
+                    }
+                case .inactive:
+                    break
+                @unknown default:
+                    break
                 }
             }
     }
@@ -311,6 +327,19 @@ public struct LocalDebugView: View {
     private var trimmedServerURL: String {
         serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
     }
+
+    private func beginBackgroundLeaseIfNeeded() {
+        guard server.isAutoReconnectEnabled, backgroundLease == nil else { return }
+        backgroundLease = ApplicationBackgroundTaskLease(name: "local-debug") {
+            backgroundLease = nil
+            server.suspendForBackground()
+        }
+    }
+
+    private func endBackgroundLease() {
+        backgroundLease?.end()
+        backgroundLease = nil
+    }
     
     private func connectToServer() {
         let address = trimmedServerURL
@@ -321,6 +350,7 @@ public struct LocalDebugView: View {
     }
     
     private func disconnectServer() {
+        endBackgroundLease()
         server.disconnect()
         discovery.start()
         WKInterfaceDevice.current().isBatteryMonitoringEnabled = false

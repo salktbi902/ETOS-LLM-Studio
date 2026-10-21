@@ -553,6 +553,7 @@ extension AppConfigStore {
         case .audioRecordingFormat: return .text(audioRecordingFormat)
         case .backgroundGenerationKeepAliveEnabled: return .bool(backgroundGenerationKeepAliveEnabled)
         case .backgroundGenerationAudioKeepAliveEnabled: return .bool(backgroundGenerationAudioKeepAliveEnabled)
+        case .localDebugKeepAliveInBackground: return .bool(localDebugKeepAliveInBackground)
         case .backgroundGenerationAudioKeepAliveVolume: return .real(backgroundGenerationAudioKeepAliveVolume)
         case .continueTTSPlaybackInBackground: return .bool(continueTTSPlaybackInBackground)
         case .enableBackgroundReplyNotification: return .bool(enableBackgroundReplyNotification)

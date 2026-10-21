@@ -25,6 +25,7 @@ extension TTSManager {
         } catch {
             await playback.stop()
             if audioPlaybackID == id {
+                updateAudioPlaying(false)
                 audioProgressTask?.cancel(); audioProgressTask = nil
                 audioPlayback = nil
             }
@@ -32,6 +33,7 @@ extension TTSManager {
         }
         await playback.stop()
         guard audioPlaybackID == id else { return }
+        updateAudioPlaying(false)
         audioProgressTask?.cancel(); audioProgressTask = nil
         audioPlayback = nil
         playbackState.position = 0; playbackState.duration = 0
@@ -51,6 +53,8 @@ extension TTSManager {
     }
 
     func pauseCloudPlayback() {
+        audioPlaybackActivityRevision &+= 1
+        updateAudioPlaying(false)
         audioProgressTask?.cancel(); audioProgressTask = nil
         guard let playback = audioPlayback else { return }
         enqueueAudioControl { await playback.pause() }
@@ -58,22 +62,51 @@ extension TTSManager {
 
     func resumeCloudPlayback() {
         guard let playback = audioPlayback, audioContinuation != nil else { return }
+        audioPlaybackActivityRevision &+= 1
         playbackState.status = .playing
-        enqueueAudioControl { try await playback.play() }
-        audioProgressTask?.cancel()
         let id = audioPlaybackID
+        let revision = audioPlaybackActivityRevision
+        enqueueAudioControl { [weak self] in
+            guard await self?.isCurrentCloudPlayback(id: id, revision: revision) == true else { return }
+            do {
+                try await playback.play()
+            } catch {
+                await self?.finishCloudPlayback(id: id, error: error, revision: revision)
+                return
+            }
+            let position = await playback.position()
+            await self?.updateCloudPlaybackPosition(position, id: id, revision: revision)
+        }
+        audioProgressTask?.cancel()
         audioProgressTask = Task { [weak self] in
             while !Task.isCancelled {
                 do { try await Task.sleep(nanoseconds: 200_000_000) } catch { return }
+                guard let self else { return }
+                let observationRevision = self.audioPlaybackActivityRevision
                 let position = await playback.position()
-                guard !Task.isCancelled, let self, audioPlaybackID == id, !isPausedByUser else { return }
-                playbackState.position = position.time; playbackState.duration = position.duration
+                guard !Task.isCancelled, audioPlaybackID == id, !isPausedByUser else { return }
+                updateCloudPlaybackPosition(position, id: id, revision: observationRevision)
             }
         }
     }
 
-    func finishCloudPlayback(id: UUID, error: Error?) {
-        guard audioPlaybackID == id, let continuation = audioContinuation else { return }
+    private func isCurrentCloudPlayback(id: UUID, revision: UInt64) -> Bool {
+        audioPlaybackID == id && audioPlaybackActivityRevision == revision
+            && audioContinuation != nil && !isPausedByUser && !isAudioSessionInterrupted && audioMediaServicesAvailable
+    }
+
+    func updateCloudPlaybackPosition(_ position: TTSCloudAudioPosition, id: UUID, revision: UInt64) {
+        guard isCurrentCloudPlayback(id: id, revision: revision) else { return }
+        playbackState.position = position.time
+        playbackState.duration = position.duration
+        updateAudioPlaying(position.isPlaying)
+    }
+
+    func finishCloudPlayback(id: UUID, error: Error?, revision: UInt64? = nil) {
+        guard audioPlaybackID == id,
+              revision == nil || revision == audioPlaybackActivityRevision,
+              let continuation = audioContinuation else { return }
+        updateAudioPlaying(false)
         audioContinuation = nil
         audioProgressTask?.cancel(); audioProgressTask = nil
         if let error { continuation.resume(throwing: error) }
@@ -81,6 +114,8 @@ extension TTSManager {
     }
 
     func stopCloudPlayback() {
+        audioPlaybackActivityRevision &+= 1
+        updateAudioPlaying(false)
         audioPlaybackID = UUID()
         let progress = audioProgressTask
         progress?.cancel(); audioProgressTask = nil

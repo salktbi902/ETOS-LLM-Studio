@@ -8441,6 +8441,10 @@
 "batch.add" = "Add Request";
 "batch.requests.watch" = "Enter and add each request separately. Swipe to remove an added request. Only added requests will be submitted.";
 
+/* 远程文件访问后台连接 */
+"localDebug.keepAliveInBackground.title" = "Keep Connected in Background";
+"localDebug.keepAliveInBackground.footer" = "Optional silent audio runs only while connected to reduce interruptions when you switch apps or lock the screen. It uses more battery, and iOS may still suspend the connection.";
+
 /* 工具描述自定义 */
 "自定义发送给模型的工具描述，不改变工具参数与执行方式。" = "Customize the tool description sent to the model without changing its parameters or execution.";
 "使用默认描述" = "Use Default Description";

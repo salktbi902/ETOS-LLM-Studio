@@ -1,0 +1,194 @@
+name: iOS tests and watchOS build
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-build:
+    runs-on: macos-26
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    env:
+      CONFIGURATION: Debug
+
+    steps:
+      - name: Check out source and native dependencies
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Select the newest installed Xcode
+        run: |
+          set -euo pipefail
+          developer_dir=$(python3 - <<'PY'
+          import glob
+          import plistlib
+          import re
+
+          candidates = []
+          for path in glob.glob('/Applications/Xcode*.app'):
+              with open(f'{path}/Contents/Info.plist', 'rb') as source:
+                  version = plistlib.load(source)['CFBundleShortVersionString']
+              numbers = tuple(map(int, re.findall(r'\d+', version)))
+              candidates.append((numbers, path))
+          if not candidates:
+              raise SystemExit('No Xcode installation found on this runner.')
+          print(max(candidates)[1] + '/Contents/Developer')
+          PY
+          )
+          sudo xcode-select --switch "$developer_dir"
+          printf 'DEVELOPER_DIR=%s\n' "$developer_dir" >> "$GITHUB_ENV"
+          xcodebuild -version
+          xcodebuild -showsdks
+          mkdir -p ci-logs ci-results
+
+      - name: Select an available iPhone simulator
+        id: simulator
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+
+          devices = json.loads(subprocess.check_output(
+              ['xcrun', 'simctl', 'list', 'devices', 'available', '--json'], text=True
+          ))['devices']
+          candidates = []
+          for runtime, entries in devices.items():
+              if '.iOS-' not in runtime:
+                  continue
+              version = tuple(map(int, runtime.rsplit('.iOS-', 1)[1].split('-')))
+              # The shared app test target requires iOS 26.5 or newer.
+              if version < (26, 5):
+                  continue
+              for device in entries:
+                  if device.get('isAvailable') and device['name'].startswith('iPhone'):
+                      candidates.append((version, device['name'], device['udid']))
+          if not candidates:
+              raise SystemExit('No available iPhone simulator with iOS >= 26.5. '
+                               'Install a compatible Xcode/iOS runtime on the runner.')
+          version, name, udid = max(candidates)
+          print(f'Using {name}, iOS {".".join(map(str, version))}, {udid}')
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              output.write(f'IOS_SIMULATOR_ID={udid}\n')
+          PY
+
+      - name: Run repository CI setup hooks
+        id: prepare
+        run: |
+          set -euo pipefail
+          unset SDKROOT LIBRARY_PATH CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH OBJC_INCLUDE_PATH
+          if [[ -f ci_scripts/ci_post_clone.sh ]]; then
+            bash ci_scripts/ci_post_clone.sh 2>&1 | tee ci-logs/ci_post_clone.log
+          fi
+          if ! command -v cmake >/dev/null 2>&1; then
+            HOMEBREW_NO_AUTO_UPDATE=1 brew install cmake
+          fi
+          # ci_pre_xcodebuild is for device archives. Run its localization check
+          # here, then prepare only the simulator slices required by this job.
+          python3 scripts/sync-extension-localizations.py --check \
+            2>&1 | tee ci-logs/localizations.log
+
+      - name: Ensure the Metal compiler is available
+        run: |
+          set -euo pipefail
+          if ! xcrun -sdk macosx metal --version 2>&1 | tee ci-logs/metal-version.log; then
+            xcodebuild -downloadComponent MetalToolchain \
+              2>&1 | tee ci-logs/metal-toolchain-install.log
+            xcrun -sdk macosx metal --version 2>&1 | tee -a ci-logs/metal-version.log
+          fi
+
+      - name: Prepare native simulator libraries
+        id: native
+        run: |
+          set -euo pipefail
+          unset SDKROOT LIBRARY_PATH CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH OBJC_INCLUDE_PATH
+          for platform in iphonesimulator watchsimulator; do
+            SDK_NAME="$platform" PLATFORM_NAME="$platform" ARCHS="$(uname -m)" \
+              scripts/build-native-static-libraries.sh --parallel \
+              2>&1 | tee "ci-logs/native-$platform.log"
+          done
+
+      - name: Resolve Swift packages
+        id: dependencies
+        run: |
+          set -euo pipefail
+          unset SDKROOT LIBRARY_PATH CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH OBJC_INCLUDE_PATH
+          xcodebuild -resolvePackageDependencies \
+            -workspace 'ETOS LLM Studio.xcworkspace' \
+            -scheme 'ETOS LLM Studio App' \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/etos-source-packages" \
+            2>&1 | tee ci-logs/packages.log
+
+      - name: Test ETOSCore on iPhone Simulator
+        run: |
+          set -euo pipefail
+          unset SDKROOT LIBRARY_PATH CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH OBJC_INCLUDE_PATH
+          xcodebuild test \
+            -workspace 'ETOS LLM Studio.xcworkspace' \
+            -scheme ETOSCore \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=$IOS_SIMULATOR_ID" \
+            -destination-timeout 180 \
+            -derivedDataPath "$RUNNER_TEMP/etos-derived-data" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/etos-source-packages" \
+            -resultBundlePath ci-results/ETOSCore.xcresult \
+            -parallel-testing-enabled NO \
+            ARCHS="$(uname -m)" ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee ci-logs/etoscore-tests.log
+
+      - name: Test the iOS app on iPhone Simulator
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' && steps.native.outcome == 'success' && steps.dependencies.outcome == 'success' && steps.simulator.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          unset SDKROOT LIBRARY_PATH CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH OBJC_INCLUDE_PATH
+          xcodebuild test \
+            -workspace 'ETOS LLM Studio.xcworkspace' \
+            -scheme 'ETOS LLM Studio App' \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=$IOS_SIMULATOR_ID" \
+            -destination-timeout 180 \
+            -derivedDataPath "$RUNNER_TEMP/etos-derived-data" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/etos-source-packages" \
+            -resultBundlePath ci-results/iOSApp.xcresult \
+            -parallel-testing-enabled NO \
+            ARCHS="$(uname -m)" ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee ci-logs/ios-app-tests.log
+
+      - name: Build the watchOS app for Simulator
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' && steps.native.outcome == 'success' && steps.dependencies.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          unset SDKROOT LIBRARY_PATH CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH OBJC_INCLUDE_PATH
+          xcodebuild build \
+            -workspace 'ETOS LLM Studio.xcworkspace' \
+            -scheme 'ETOS LLM Studio Watch App' \
+            -configuration Debug \
+            -destination 'generic/platform=watchOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/etos-derived-data" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/etos-source-packages" \
+            ARCHS="$(uname -m)" ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee ci-logs/watchos-build.log
+
+      - name: Upload build logs and test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ci-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ci-logs/
+            ci-results/
+          if-no-files-found: ignore
+          retention-days: 7
