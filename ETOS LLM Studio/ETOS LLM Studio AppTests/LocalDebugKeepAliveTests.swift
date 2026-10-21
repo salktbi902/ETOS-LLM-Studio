@@ -1,4 +1,6 @@
 import AVFoundation
+import Combine
+import ETOSCore
 import Testing
 @testable import ETOS_LLM_Studio_App
 
@@ -62,6 +64,198 @@ struct LocalDebugKeepAliveTests {
         activity.isBusy = false
         keepAlive.update(isConnected: true, enabled: true)
         #expect(keepAlive.isActive)
+    }
+
+    @Test("朗读缓冲会让出音频，但不代表已有后台音频覆盖")
+    func bufferingYieldsWithoutClaimingBackgroundCoverage() {
+        let playback = TestPlayback()
+        let activity = TestAudioActivity()
+        activity.isBusy = true
+        let keepAlive = LocalDebugKeepAlive(
+            playback: playback,
+            hasOtherAudio: { activity.isBusy },
+            hasOtherBackgroundAudio: { activity.hasBackgroundAudio }
+        )
+
+        keepAlive.update(isConnected: true, enabled: true)
+
+        #expect(!keepAlive.isActive && !keepAlive.hasBackgroundAudioCoverage)
+        #expect(playback.startCount == 0)
+        #expect(playback.lastDeactivationRequest == false)
+    }
+
+    @Test("实际朗读或等待音覆盖后台，无需启动未授权的静音播放")
+    func otherAudioCoversConnectionWithSilentPlaybackDisabled() {
+        let playback = TestPlayback()
+        let activity = TestAudioActivity()
+        activity.isBusy = true
+        activity.hasBackgroundAudio = true
+        let keepAlive = LocalDebugKeepAlive(
+            playback: playback,
+            hasOtherAudio: { activity.isBusy },
+            hasOtherBackgroundAudio: { activity.hasBackgroundAudio }
+        )
+
+        keepAlive.update(isConnected: true, enabled: false)
+
+        #expect(!keepAlive.isActive && keepAlive.hasBackgroundAudioCoverage)
+        #expect(playback.startCount == 0)
+        #expect(playback.lastDeactivationRequest == false)
+    }
+
+    @Test("其他音频结束后恢复静音播放，覆盖状态不会中途变为无覆盖")
+    func audioHandoffKeepsCoverageUntilSilentPlaybackResumes() {
+        let playback = TestPlayback()
+        let activity = TestAudioActivity()
+        let keepAlive = LocalDebugKeepAlive(
+            playback: playback,
+            hasOtherAudio: { activity.isBusy },
+            hasOtherBackgroundAudio: { activity.hasBackgroundAudio }
+        )
+        var coverageChanges: [Bool] = []
+        let observation = keepAlive.$hasBackgroundAudioCoverage
+            .removeDuplicates()
+            .sink { coverageChanges.append($0) }
+        defer { observation.cancel() }
+        keepAlive.update(isConnected: true, enabled: true)
+
+        activity.isBusy = true
+        activity.hasBackgroundAudio = true
+        keepAlive.update(isConnected: true, enabled: true)
+        #expect(!keepAlive.isActive && keepAlive.hasBackgroundAudioCoverage)
+
+        activity.isBusy = false
+        activity.hasBackgroundAudio = false
+        keepAlive.update(isConnected: true, enabled: true)
+
+        #expect(keepAlive.isActive && keepAlive.hasBackgroundAudioCoverage)
+        #expect(playback.startCount == 2)
+        #expect(coverageChanges == [false, true])
+    }
+
+    @Test("其他音频结束且静音恢复失败时清除后台覆盖")
+    func failedSilentRestartClearsOtherAudioCoverage() {
+        let playback = TestPlayback()
+        let activity = TestAudioActivity()
+        activity.isBusy = true
+        activity.hasBackgroundAudio = true
+        let keepAlive = LocalDebugKeepAlive(
+            playback: playback,
+            hasOtherAudio: { activity.isBusy },
+            hasOtherBackgroundAudio: { activity.hasBackgroundAudio }
+        )
+        keepAlive.update(isConnected: true, enabled: true)
+        #expect(keepAlive.hasBackgroundAudioCoverage)
+
+        activity.isBusy = false
+        activity.hasBackgroundAudio = false
+        playback.failsToStart = true
+        keepAlive.update(isConnected: true, enabled: true)
+
+        #expect(!keepAlive.isActive && !keepAlive.hasBackgroundAudioCoverage)
+        #expect(playback.startCount == 1)
+    }
+
+    @Test("系统中断立即清除其他音频覆盖，不能由过期播放标记恢复")
+    func interruptionClearsCoverageDespiteOtherAudioFlag() {
+        let activity = TestAudioActivity()
+        activity.isBusy = true
+        activity.hasBackgroundAudio = true
+        let keepAlive = LocalDebugKeepAlive(
+            playback: TestPlayback(),
+            hasOtherAudio: { activity.isBusy },
+            hasOtherBackgroundAudio: { activity.hasBackgroundAudio }
+        )
+        keepAlive.update(isConnected: true, enabled: true)
+        #expect(keepAlive.hasBackgroundAudioCoverage)
+
+        keepAlive.handleInterruption(.began, shouldResume: false)
+        #expect(!keepAlive.hasBackgroundAudioCoverage)
+        keepAlive.update(isConnected: true, enabled: true)
+        #expect(!keepAlive.isActive && !keepAlive.hasBackgroundAudioCoverage)
+    }
+
+    @Test("用户停止连接后其他音频不能恢复覆盖或静音播放")
+    func stoppingConnectionRevokesCoverageDuringOtherAudio() {
+        let playback = TestPlayback()
+        let activity = TestAudioActivity()
+        activity.isBusy = true
+        activity.hasBackgroundAudio = true
+        let keepAlive = LocalDebugKeepAlive(
+            playback: playback,
+            hasOtherAudio: { activity.isBusy },
+            hasOtherBackgroundAudio: { activity.hasBackgroundAudio }
+        )
+        keepAlive.update(isConnected: true, enabled: true)
+        #expect(keepAlive.hasBackgroundAudioCoverage)
+
+        keepAlive.stop()
+        keepAlive.handleInterruption(.ended, shouldResume: true)
+
+        #expect(!keepAlive.isActive && !keepAlive.hasBackgroundAudioCoverage)
+        #expect(playback.startCount == 0)
+        #expect(playback.lastDeactivationRequest == false)
+    }
+
+    @Test("后台租约到期时真实的其他音频仍可保护诊断连接")
+    func leaseExpiryPreservesConnectionCoveredByOtherAudio() {
+        let server = LocalDebugServer()
+        server.isRunning = true
+        let activity = TestAudioActivity()
+        activity.isBusy = true
+        activity.hasBackgroundAudio = true
+        let keepAlive = LocalDebugKeepAlive(
+            playback: TestPlayback(),
+            hasOtherAudio: { activity.isBusy },
+            hasOtherBackgroundAudio: { activity.hasBackgroundAudio }
+        )
+        keepAlive.update(isConnected: true, enabled: true)
+        let lease = ApplicationBackgroundTaskLease(name: "local-debug-test") {
+            keepAlive.update(isConnected: server.isRunning, enabled: true)
+            if !keepAlive.hasBackgroundAudioCoverage {
+                server.suspendForBackground()
+            }
+        }
+
+        lease.expire()
+
+        #expect(server.isRunning && keepAlive.hasBackgroundAudioCoverage)
+        #expect(!keepAlive.isActive)
+        server.disconnect()
+        keepAlive.stop()
+    }
+
+    @Test("后台租约到期先刷新音频，不能沿用已经结束的其他音频覆盖")
+    func leaseExpiryRefreshesEndedAudioBeforeSuspending() {
+        let server = LocalDebugServer()
+        server.isRunning = true
+        let playback = TestPlayback()
+        let activity = TestAudioActivity()
+        activity.isBusy = true
+        activity.hasBackgroundAudio = true
+        let keepAlive = LocalDebugKeepAlive(
+            playback: playback,
+            hasOtherAudio: { activity.isBusy },
+            hasOtherBackgroundAudio: { activity.hasBackgroundAudio }
+        )
+        keepAlive.update(isConnected: true, enabled: true)
+        let lease = ApplicationBackgroundTaskLease(name: "local-debug-test") {
+            keepAlive.update(isConnected: server.isRunning, enabled: true)
+            if !keepAlive.hasBackgroundAudioCoverage {
+                server.suspendForBackground()
+            }
+        }
+        // Simulate another owner ending before its queued publisher refresh runs.
+        activity.isBusy = false
+        activity.hasBackgroundAudio = false
+        playback.failsToStart = true
+
+        lease.expire()
+
+        #expect(!server.isRunning && !keepAlive.hasBackgroundAudioCoverage)
+        #expect(playback.startCount == 1)
+        server.disconnect()
+        keepAlive.stop()
     }
 
     @Test("音频中断只在系统允许且用户仍授权时恢复")
@@ -128,6 +322,7 @@ struct LocalDebugKeepAliveTests {
 @MainActor
 private final class TestAudioActivity {
     var isBusy = false
+    var hasBackgroundAudio = false
 }
 
 @MainActor

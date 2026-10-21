@@ -22,9 +22,11 @@ protocol LocalDebugKeepAlivePlayback: AnyObject {
 @MainActor
 final class LocalDebugKeepAlive: ObservableObject {
     @Published private(set) var isActive = false
+    @Published private(set) var hasBackgroundAudioCoverage = false
 
     private let playback: any LocalDebugKeepAlivePlayback
     private let hasOtherAudio: () -> Bool
+    private let hasOtherBackgroundAudio: () -> Bool
     private var isConnected = false
     private var isEnabled = false
     private var isInterrupted = false
@@ -35,11 +37,12 @@ final class LocalDebugKeepAlive: ObservableObject {
         let generationAudio = BackgroundGenerationAudioKeepAliveManager.shared
         self.init(
             playback: LocalDebugSilentAudioPlayback(),
-            hasOtherAudio: { tts.isSpeaking || generationAudio.isPlaying }
+            hasOtherAudio: { tts.isSpeaking || generationAudio.isPlaying },
+            hasOtherBackgroundAudio: { tts.isAudioPlaying || generationAudio.isPlaying }
         )
 
         tts.$isSpeaking
-            .combineLatest(generationAudio.$isPlaying)
+            .combineLatest(tts.$isAudioPlaying, generationAudio.$isPlaying)
             .sink { [weak self] _ in
                 Task { @MainActor [weak self] in
                     self?.refreshPlayback()
@@ -51,10 +54,12 @@ final class LocalDebugKeepAlive: ObservableObject {
     init(
         playback: any LocalDebugKeepAlivePlayback,
         hasOtherAudio: @escaping () -> Bool = { false },
+        hasOtherBackgroundAudio: @escaping () -> Bool = { false },
         notificationCenter: NotificationCenter = .default
     ) {
         self.playback = playback
         self.hasOtherAudio = hasOtherAudio
+        self.hasOtherBackgroundAudio = hasOtherBackgroundAudio
 
         notificationCenter.publisher(for: AVAudioSession.interruptionNotification)
             .sink { [weak self] notification in
@@ -119,7 +124,8 @@ final class LocalDebugKeepAlive: ObservableObject {
     }
 
     private func refreshPlayback() {
-        let otherAudioIsActive = hasOtherAudio()
+        defer { updateBackgroundAudioCoverage() }
+        let otherAudioIsActive = hasOtherAudio() || hasOtherBackgroundAudio()
         guard isConnected, isEnabled, !isInterrupted, !otherAudioIsActive else {
             // 与等待音的 pauseForSpeech 一致：只停止本播放器，不能关闭刚被朗读接管的会话。
             stopPlayback(deactivateSession: !isInterrupted && !otherAudioIsActive)
@@ -144,6 +150,17 @@ final class LocalDebugKeepAlive: ObservableObject {
     private func stopPlayback(deactivateSession: Bool) {
         playback.stop(deactivateSession: deactivateSession)
         isActive = false
+        updateBackgroundAudioCoverage()
+    }
+
+    private func updateBackgroundAudioCoverage() {
+        // 朗读排队或缓冲只表示音频会话繁忙，不能当作后台仍有音频播放。
+        // 用户开关只授权本类启动静音播放，不能否认其他模块已经在播放的音频。
+        let hasCoverage = isConnected && !isInterrupted
+            && (playback.isPlaying || hasOtherBackgroundAudio())
+        if hasBackgroundAudioCoverage != hasCoverage {
+            hasBackgroundAudioCoverage = hasCoverage
+        }
     }
 }
 

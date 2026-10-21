@@ -4,6 +4,7 @@ import Foundation
 struct TTSCloudAudioPosition: Sendable {
     var time: TimeInterval
     var duration: TimeInterval
+    var isPlaying: Bool = false
 }
 
 protocol TTSCloudAudioPlayback: Actor {
@@ -41,7 +42,9 @@ actor TTSCloudAudioBackend: TTSCloudAudioPlayback {
     func pause() { player?.pause() }
     func seek(to time: TimeInterval) { player?.currentTime = time }
     func setSpeed(_ speed: Float) { player?.rate = speed }
-    func position() -> TTSCloudAudioPosition { .init(time: player?.currentTime ?? 0, duration: player?.duration ?? 0) }
+    func position() -> TTSCloudAudioPosition {
+        .init(time: player?.currentTime ?? 0, duration: player?.duration ?? 0, isPlaying: player?.isPlaying == true)
+    }
     func stop() { player?.stop(); player?.delegate = nil; player = nil; delegate = nil }
 }
 

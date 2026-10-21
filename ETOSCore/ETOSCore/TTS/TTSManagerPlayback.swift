@@ -30,6 +30,7 @@ extension TTSManager {
             playbackState.currentChunkIndex += 1
             playbackState.totalChunks = max(playbackState.currentChunkIndex, playbackState.currentChunkIndex + queue.count)
             playbackState.status = .buffering
+            updateAudioPlaying(false)
             playbackState.errorMessage = nil
 
             let settings = item.settingsOverride ?? self.settings
@@ -61,6 +62,7 @@ extension TTSManager {
                     break
                 }
                 logger.error("TTS 处理失败: \(error.localizedDescription, privacy: .public)")
+                updateAudioPlaying(false)
                 playbackState.status = .error
                 playbackState.errorMessage = error.localizedDescription
                 queue.removeAll()
@@ -77,6 +79,7 @@ extension TTSManager {
             playbackState.duration = 0
         }
 
+        updateAudioPlaying(false)
         deactivateTTSAudioSessionIfNeeded()
         isSpeaking = false
         currentSpeakingMessageID = nil
@@ -236,9 +239,11 @@ extension TTSManager {
                 let elapsed = Date().timeIntervalSince(startedAt)
                 let isSpeakingNow = self.speechSynthesizer.isSpeaking
                 let isPausedNow = self.speechSynthesizer.isPaused
+                self.updateAudioPlaying(isSpeakingNow && !isPausedNow)
 
                 if elapsed >= hardDeadline {
                     self.logger.error("系统 TTS 长时间无回调，自动恢复播放队列。")
+                    self.updateAudioPlaying(false)
                     if isSpeakingNow {
                         self.activeSpeechUtterance = nil
                         self.speechSynthesizer.stopSpeaking(at: .immediate)
@@ -320,11 +325,31 @@ extension TTSManager {
         Task { @MainActor [weak self] in
             guard let self,
                   self.activeSpeechUtterance.map(ObjectIdentifier.init) == utteranceID else { return }
-            self.speechDidStart = true
+            self.handleSpeechPlaybackState(utteranceID: utteranceID, isPlaying: true)
 #if os(macOS)
             self.stopSpeechMonitor(resetDidStart: false)
 #endif
         }
+    }
+
+    nonisolated public func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didPause utterance: AVSpeechUtterance) {
+        let utteranceID = ObjectIdentifier(utterance)
+        Task { @MainActor [weak self] in
+            self?.handleSpeechPlaybackState(utteranceID: utteranceID, isPlaying: false)
+        }
+    }
+
+    nonisolated public func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didContinue utterance: AVSpeechUtterance) {
+        let utteranceID = ObjectIdentifier(utterance)
+        Task { @MainActor [weak self] in
+            self?.handleSpeechPlaybackState(utteranceID: utteranceID, isPlaying: true)
+        }
+    }
+
+    func handleSpeechPlaybackState(utteranceID: ObjectIdentifier, isPlaying: Bool) {
+        guard activeSpeechUtterance.map(ObjectIdentifier.init) == utteranceID else { return }
+        if isPlaying { speechDidStart = true }
+        updateAudioPlaying(isPlaying)
     }
 
     nonisolated public func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
@@ -344,6 +369,7 @@ extension TTSManager {
     @MainActor
     private func handleSpeechSynthesizerDidFinish(utteranceID: ObjectIdentifier) {
         guard activeSpeechUtterance.map(ObjectIdentifier.init) == utteranceID else { return }
+        updateAudioPlaying(false)
         activeSpeechUtterance = nil
         stopSpeechMonitor()
         playbackState.status = .ended
@@ -357,6 +383,7 @@ extension TTSManager {
     @MainActor
     private func handleSpeechSynthesizerDidCancel(utteranceID: ObjectIdentifier) {
         guard activeSpeechUtterance.map(ObjectIdentifier.init) == utteranceID else { return }
+        updateAudioPlaying(false)
         activeSpeechUtterance = nil
         stopSpeechMonitor()
         if let continuation = speechContinuation {

@@ -102,6 +102,7 @@ extension TTSManager {
     }
 
     func stopCurrentPlayback(clearQueueOnly: Bool) {
+        updateAudioPlaying(false)
 #if canImport(AVFoundation)
         stopCloudPlayback()
 #endif

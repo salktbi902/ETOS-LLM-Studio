@@ -10,6 +10,8 @@ public final class TTSManager: NSObject, ObservableObject {
     public static let shared = TTSManager()
 
     @Published public internal(set) var isSpeaking: Bool = false
+    /// 实际播放状态，不包括预处理、网络合成或用户暂停。
+    @Published public private(set) var isAudioPlaying: Bool = false
     @Published public internal(set) var playbackState: TTSPlaybackState = .init()
     @Published public internal(set) var currentSpeakingMessageID: UUID?
     @Published var cachedNetworkAudioExport: TTSAudioExport?
@@ -40,10 +42,14 @@ public final class TTSManager: NSObject, ObservableObject {
     var isPausedByUser = false
     var activeBackend: ActiveBackend = .none
     private var isApplicationInBackground = false
+    private(set) var isAudioSessionInterrupted = false
+    private(set) var audioMediaServicesAvailable = true
+    private var audioSessionCancellables: Set<AnyCancellable> = []
 
 #if canImport(AVFoundation)
     var audioPlayback: (any TTSCloudAudioPlayback)?
     var audioPlaybackID = UUID()
+    var audioPlaybackActivityRevision: UInt64 = 0
     var audioControlTask: Task<Void, Never>?
     var audioProgressTask: Task<Void, Never>?
     var audioContinuation: CheckedContinuation<Void, Error>?
@@ -111,6 +117,7 @@ public final class TTSManager: NSObject, ObservableObject {
         self.makeAudioPlayback = { TTSCloudAudioBackend() }
 #endif
         super.init()
+        observeAudioSession()
     }
 
 #if canImport(AVFoundation)
@@ -120,6 +127,7 @@ public final class TTSManager: NSObject, ObservableObject {
         self.urlSession = urlSession; self.settingsProvider = settingsProvider
         self.serviceProvider = serviceProvider; self.makeAudioPlayback = makeAudioPlayback
         super.init()
+        observeAudioSession()
     }
 #endif
 
@@ -182,6 +190,7 @@ public final class TTSManager: NSObject, ObservableObject {
         }
 
         if workerTask == nil {
+            updateAudioPlaying(false)
             isSpeaking = true
             currentSpeakingMessageID = messageID
             playbackState.status = .buffering
@@ -296,6 +305,7 @@ public final class TTSManager: NSObject, ObservableObject {
     public func pause() {
         guard isSpeaking else { return }
         isPausedByUser = true
+        updateAudioPlaying(false)
 #if canImport(AVFoundation)
         switch activeBackend {
         case .cloud:
@@ -333,6 +343,7 @@ public final class TTSManager: NSObject, ObservableObject {
     }
 
     public func stop() {
+        updateAudioPlaying(false)
         cancelPlaybackTasks()
         stopCurrentPlayback(clearQueueOnly: false)
         deactivateTTSAudioSessionIfNeeded()
@@ -407,6 +418,59 @@ public final class TTSManager: NSObject, ObservableObject {
             enqueueAudioControl { try Task.checkCancellation(); await playback.setSpeed(speed) }
         }
         playbackState.speed = speed
+#endif
+    }
+
+    func updateAudioPlaying(_ isPlaying: Bool) {
+        let actualPlaying = isPlaying && !isPausedByUser && !isAudioSessionInterrupted && audioMediaServicesAvailable
+        guard isAudioPlaying != actualPlaying else { return }
+        isAudioPlaying = actualPlaying
+    }
+
+    func setAudioSessionInterrupted(_ interrupted: Bool) {
+#if canImport(AVFoundation)
+        if isAudioSessionInterrupted != interrupted { audioPlaybackActivityRevision &+= 1 }
+#endif
+        isAudioSessionInterrupted = interrupted
+        // 恢复时等待播放器或系统语音确认，不把曾经播放过当作仍在播放。
+        if interrupted { updateAudioPlaying(false) }
+    }
+
+    func setAudioMediaServicesAvailable(_ available: Bool) {
+#if canImport(AVFoundation)
+        if audioMediaServicesAvailable != available { audioPlaybackActivityRevision &+= 1 }
+#endif
+        audioMediaServicesAvailable = available
+        updateAudioPlaying(false)
+    }
+
+    private func observeAudioSession() {
+#if os(iOS) || os(watchOS)
+        NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)
+            .sink { [weak self] notification in
+                guard let rawType = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                      let type = AVAudioSession.InterruptionType(rawValue: rawType) else { return }
+                let interrupted = type == .began
+                Task { @MainActor [weak self] in
+                    self?.setAudioSessionInterrupted(interrupted)
+                }
+            }
+            .store(in: &audioSessionCancellables)
+
+        NotificationCenter.default.publisher(for: AVAudioSession.mediaServicesWereLostNotification)
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in self?.setAudioMediaServicesAvailable(false) }
+            }
+            .store(in: &audioSessionCancellables)
+
+        NotificationCenter.default.publisher(for: AVAudioSession.mediaServicesWereResetNotification)
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.setAudioMediaServicesAvailable(false)
+                    self?.setAudioMediaServicesAvailable(true)
+                }
+            }
+            .store(in: &audioSessionCancellables)
 #endif
     }
 

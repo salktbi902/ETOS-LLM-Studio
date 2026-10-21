@@ -1,10 +1,27 @@
 import Foundation
+import AVFoundation
+import Combine
 import Testing
 @testable import ETOSCore
 
 @Suite("朗读后台播放器生命周期")
 @MainActor
 struct TTSPlaybackLifecycleTests {
+    @Test("音频覆盖只发布状态变化，不重复发布进度轮询状态")
+    func actualAudioPublishesOnlyTransitions() async {
+        let manager = makeManager(TTSPlaybackStub())
+        var values: [Bool] = []
+        let observation = manager.$isAudioPlaying.sink { values.append($0) }
+        manager.updateAudioPlaying(false)
+        manager.updateAudioPlaying(true)
+        manager.updateAudioPlaying(true)
+        manager.updateAudioPlaying(false)
+        manager.updateAudioPlaying(false)
+        #expect(values == [false, true, false])
+        observation.cancel()
+        await manager.stopAndWait()
+    }
+
     @Test("注入设置和空服务不会访问旧设置单例，播放参数取自调用方快照")
     func injectedConfiguration() async {
         var settings = TTSSettingsSnapshot.defaultValue
@@ -21,6 +38,8 @@ struct TTSPlaybackLifecycleTests {
         let manager = makeManager(backend)
         let playback = start(manager)
         await backend.waitForPreparation()
+        #expect(manager.isSpeaking)
+        #expect(!manager.isAudioPlaying)
         var drained = false
         let stop = Task { await manager.stopAndWait(); drained = true }
         await backend.waitForStop()
@@ -29,6 +48,35 @@ struct TTSPlaybackLifecycleTests {
         await stop.value
         #expect(drained); #expect(await playback.value)
         #expect(await backend.playCount == 0); #expect(manager.playbackState.status == .idle)
+        #expect(!manager.isAudioPlaying)
+    }
+
+    @Test("实际音频仅在准备完成并成功播放后生效，结束时立即清除")
+    func actualAudioTracksSuccessfulPlayback() async {
+        let backend = TTSPlaybackStub(suspendsPreparation: true)
+        let manager = makeManager(backend)
+        let playback = start(manager)
+        await backend.waitForPreparation()
+        #expect(!manager.isAudioPlaying)
+        await backend.releasePreparation()
+        await backend.waitForPlay(count: 1)
+        await manager.audioControlTask?.value
+        #expect(manager.isAudioPlaying)
+        await backend.finish()
+        #expect(!manager.isAudioPlaying)
+        #expect(!(await playback.value))
+        await manager.stopAndWait()
+    }
+
+    @Test("播放启动失败不能提供后台音频覆盖")
+    func failedPlaybackNeverReportsActiveAudio() async {
+        let backend = TTSPlaybackStub(failsPlayback: true)
+        let manager = makeManager(backend)
+        let playback = start(manager)
+        #expect(!(await playback.value))
+        #expect(!manager.isAudioPlaying)
+        #expect(await backend.stopCount > 0)
+        await manager.stopAndWait()
     }
 
     @Test("暂停期间定位和调速不会启动播放，恢复沿用定位结果")
@@ -37,12 +85,18 @@ struct TTSPlaybackLifecycleTests {
         let manager = makeManager(backend)
         let playback = start(manager)
         await backend.waitForPlay(count: 1)
+        await manager.audioControlTask?.value
+        #expect(manager.isAudioPlaying)
         manager.pause(); await manager.audioControlTask?.value
+        #expect(manager.isSpeaking)
+        #expect(!manager.isAudioPlaying)
         manager.seekBy(seconds: 12); manager.setPlaybackSpeed(1.5)
         await manager.audioControlTask?.value
         #expect(await backend.playCount == 1); #expect(await backend.time == 12)
         #expect(await backend.speed == 1.5); #expect(manager.playbackState.status == .paused)
         manager.resume(); await backend.waitForPlay(count: 2)
+        await manager.audioControlTask?.value
+        #expect(manager.isAudioPlaying)
         #expect(await backend.time == 12)
         await manager.stopAndWait()
         #expect(await playback.value)
@@ -58,11 +112,85 @@ struct TTSPlaybackLifecycleTests {
         await manager.stopAndWait(); _ = await first.value
         let second = start(manager)
         await backend.waitForPlay(count: 2)
+        await manager.audioControlTask?.value
         oldCompletion?(true)
         #expect(manager.audioContinuation != nil); #expect(manager.playbackState.status == .playing)
+        #expect(manager.isAudioPlaying)
         await backend.finish()
         #expect(!(await second.value))
         await manager.stopAndWait()
+    }
+
+    @Test("系统语音事件按当前语句识别，中断与暂停不得留下假播放状态")
+    func systemAudioEventsRejectStaleUtterances() async {
+        let manager = makeManager(TTSPlaybackStub())
+        let first = AVSpeechUtterance(string: "first")
+        let current = AVSpeechUtterance(string: "current")
+        manager.isSpeaking = true
+        manager.activeSpeechUtterance = current
+        manager.handleSpeechPlaybackState(utteranceID: ObjectIdentifier(current), isPlaying: true)
+        #expect(manager.isAudioPlaying)
+        manager.handleSpeechPlaybackState(utteranceID: ObjectIdentifier(first), isPlaying: false)
+        #expect(manager.isAudioPlaying)
+
+        manager.setAudioSessionInterrupted(true)
+        #expect(!manager.isAudioPlaying)
+        manager.handleSpeechPlaybackState(utteranceID: ObjectIdentifier(current), isPlaying: true)
+        #expect(!manager.isAudioPlaying)
+        manager.setAudioMediaServicesAvailable(false)
+        manager.setAudioMediaServicesAvailable(true)
+        manager.handleSpeechPlaybackState(utteranceID: ObjectIdentifier(current), isPlaying: true)
+        #expect(!manager.isAudioPlaying)
+        manager.setAudioSessionInterrupted(false)
+        #expect(!manager.isAudioPlaying)
+        manager.handleSpeechPlaybackState(utteranceID: ObjectIdentifier(current), isPlaying: true)
+        #expect(manager.isAudioPlaying)
+        manager.handleSpeechPlaybackState(utteranceID: ObjectIdentifier(current), isPlaying: false)
+        #expect(!manager.isAudioPlaying)
+        // Only exercise event handling; no synthesizer or audio device is started.
+        manager.activeSpeechUtterance = nil
+        await manager.stopAndWait()
+    }
+
+    @Test("当前播放器停止的快照清除覆盖，旧播放器快照不影响新播放器")
+    func actualAudioSnapshotRejectsStalePlayback() async {
+        let backend = TTSPlaybackStub()
+        let manager = makeManager(backend)
+        let playback = start(manager)
+        await backend.waitForPlay(count: 1)
+        await manager.audioControlTask?.value
+        let currentID = manager.audioPlaybackID
+        let originalRevision = manager.audioPlaybackActivityRevision
+        manager.updateCloudPlaybackPosition(
+            .init(time: 1, duration: 30, isPlaying: false), id: UUID(), revision: originalRevision
+        )
+        #expect(manager.isAudioPlaying)
+        manager.updateCloudPlaybackPosition(
+            .init(time: 1, duration: 30, isPlaying: false), id: currentID, revision: originalRevision
+        )
+        #expect(!manager.isAudioPlaying)
+        manager.pause()
+        await manager.audioControlTask?.value
+        manager.resume()
+        await backend.waitForPlay(count: 2)
+        await manager.audioControlTask?.value
+        #expect(manager.isAudioPlaying)
+        manager.updateCloudPlaybackPosition(
+            .init(time: 1, duration: 30, isPlaying: false), id: currentID, revision: originalRevision
+        )
+        #expect(manager.isAudioPlaying)
+        manager.finishCloudPlayback(id: currentID, error: TTSCloudAudioError.start, revision: originalRevision)
+        #expect(manager.audioContinuation != nil)
+        #expect(manager.isAudioPlaying)
+        let preInterruptionRevision = manager.audioPlaybackActivityRevision
+        manager.setAudioSessionInterrupted(true)
+        manager.setAudioSessionInterrupted(false)
+        manager.updateCloudPlaybackPosition(
+            .init(time: 1, duration: 30, isPlaying: true), id: currentID, revision: preInterruptionRevision
+        )
+        #expect(!manager.isAudioPlaying)
+        await manager.stopAndWait()
+        #expect(await playback.value)
     }
 
     @Test("清除历史同时释放朗读请求和内存导出，普通停止保留重播请求")
@@ -136,18 +264,23 @@ private actor TTSPrefetchGate {
 
 private actor TTSPlaybackStub: TTSCloudAudioPlayback {
     let suspendsPreparation: Bool
+    let failsPlayback: Bool
     var completion: (@MainActor @Sendable (Bool) -> Void)?
     var playCount = 0
     var stopCount = 0
     var time: TimeInterval = 0
     var speed: Float = 1
+    var isPlaying = false
     private var prepared = false
     private var preparationGate: CheckedContinuation<Void, Never>?
     private var preparationWaiter: CheckedContinuation<Void, Never>?
     private var stopWaiter: CheckedContinuation<Void, Never>?
     private var playWaiter: (Int, CheckedContinuation<Void, Never>)?
 
-    init(suspendsPreparation: Bool = false) { self.suspendsPreparation = suspendsPreparation }
+    init(suspendsPreparation: Bool = false, failsPlayback: Bool = false) {
+        self.suspendsPreparation = suspendsPreparation
+        self.failsPlayback = failsPlayback
+    }
 
     func prepare(clip: TTSManager.AudioClip, speed: Float, onFinish: @escaping @MainActor @Sendable (Bool) -> Void) async throws -> TimeInterval {
         completion = onFinish; self.speed = speed; prepared = true
@@ -157,15 +290,17 @@ private actor TTSPlaybackStub: TTSCloudAudioPlayback {
     }
     func play() throws {
         try Task.checkCancellation()
+        if failsPlayback { throw TTSCloudAudioError.start }
+        isPlaying = true
         playCount += 1
         if let (count, waiter) = playWaiter, playCount >= count { playWaiter = nil; waiter.resume() }
     }
-    func pause() {}
+    func pause() { isPlaying = false }
     func seek(to time: TimeInterval) { self.time = time }
     func setSpeed(_ speed: Float) { self.speed = speed }
-    func position() -> TTSCloudAudioPosition { .init(time: time, duration: 30) }
-    func stop() { stopCount += 1; stopWaiter?.resume(); stopWaiter = nil }
-    func finish() async { await completion?(true) }
+    func position() -> TTSCloudAudioPosition { .init(time: time, duration: 30, isPlaying: isPlaying) }
+    func stop() { isPlaying = false; stopCount += 1; stopWaiter?.resume(); stopWaiter = nil }
+    func finish() async { isPlaying = false; await completion?(true) }
     func waitForPreparation() async {
         if !prepared { await withCheckedContinuation { preparationWaiter = $0 } }
     }

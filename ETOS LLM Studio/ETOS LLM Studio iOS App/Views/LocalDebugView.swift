@@ -276,8 +276,11 @@ struct LocalDebugView: View {
         .onChange(of: appConfig.localDebugKeepAliveInBackground) { _, _ in
             updateKeepAlive()
         }
-        .onChange(of: keepAlive.isActive) { _, isActive in
-            if !isActive && scenePhase == .background {
+        .onChange(of: keepAlive.hasBackgroundAudioCoverage) { _, hasCoverage in
+            guard scenePhase == .background else { return }
+            if hasCoverage {
+                endBackgroundLease()
+            } else {
                 beginBackgroundLeaseIfNeeded()
             }
         }
@@ -311,10 +314,15 @@ struct LocalDebugView: View {
     }
 
     private func beginBackgroundLeaseIfNeeded() {
-        guard server.isAutoReconnectEnabled, backgroundLease == nil else { return }
+        guard server.isAutoReconnectEnabled,
+              !keepAlive.hasBackgroundAudioCoverage,
+              backgroundLease == nil else { return }
         backgroundLease = ApplicationBackgroundTaskLease(name: "local-debug") {
             backgroundLease = nil
-            if !keepAlive.isActive {
+            // 音频订阅通过 MainActor 任务投递；到期时重新读取当前所有者，
+            // 避免用尚未投递的旧状态决定关闭连接，也允许已授权播放器接回音频。
+            updateKeepAlive()
+            if !keepAlive.hasBackgroundAudioCoverage {
                 server.suspendForBackground()
             }
         }
