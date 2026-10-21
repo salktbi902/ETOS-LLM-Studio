@@ -13,7 +13,10 @@ import ETOSCore
 struct LocalDebugView: View {
     @StateObject private var server = LocalDebugServer()
     @StateObject private var discovery = LocalDebugServerDiscovery()
+    @StateObject private var keepAlive = LocalDebugKeepAlive()
+    @ObservedObject private var appConfig = AppConfigStore.shared
     @Environment(\.scenePhase) private var scenePhase
+    @State private var backgroundLease: ApplicationBackgroundTaskLease?
     @State private var showAPIDoc = false
     @State private var serverURL: String = ""
     @State private var showLogs = false
@@ -177,6 +180,15 @@ struct LocalDebugView: View {
                 }
             }
             
+            Section {
+                Toggle(
+                    NSLocalizedString("localDebug.keepAliveInBackground.title", value: "Stay connected in the background", comment: "Local debug background connection"),
+                    isOn: $appConfig.localDebugKeepAliveInBackground
+                )
+            } footer: {
+                Text(NSLocalizedString("localDebug.keepAliveInBackground.footer", value: "Uses silent audio to keep the diagnostic connection active while the app is in the background. This may increase battery use, and the system may still interrupt the connection.", comment: "Local debug background audio and battery usage"))
+            }
+
             // 使用说明
             Section(header: Text(NSLocalizedString("文档", comment: "")), footer: Text(NSLocalizedString("远程诊断模式 · 主动连接调试端", comment: ""))) {
                 Button {
@@ -235,26 +247,82 @@ struct LocalDebugView: View {
         }
         .onAppear {
             loadStoredServerURL()
-            discovery.start()
+            updateKeepAlive()
+            UIApplication.shared.isIdleTimerDisabled = server.isRunning && scenePhase == .active
+            if !server.isRunning && scenePhase == .active {
+                discovery.start()
+            }
         }
         .onDisappear {
             discovery.stop()
+            if scenePhase == .active {
+                endBackgroundLease()
+                keepAlive.stop()
+            }
+            UIApplication.shared.isIdleTimerDisabled = false
         }
         .onChange(of: discovery.discoveredServers) { _, candidates in
             promptForDiscoveredServerIfNeeded(candidates)
         }
         .onChange(of: server.isRunning) { _, isRunning in
+            updateKeepAlive()
+            UIApplication.shared.isIdleTimerDisabled = isRunning && scenePhase == .active
             if isRunning {
                 discovery.stop()
-            } else {
+            } else if scenePhase == .active {
                 discovery.start()
             }
         }
-        .onChange(of: scenePhase) { _, newPhase in
-            if newPhase != .active && server.isRunning {
-                disconnectServer()
+        .onChange(of: appConfig.localDebugKeepAliveInBackground) { _, _ in
+            updateKeepAlive()
+        }
+        .onChange(of: keepAlive.isActive) { _, isActive in
+            if !isActive && scenePhase == .background {
+                beginBackgroundLeaseIfNeeded()
             }
         }
+        .onChange(of: scenePhase) { _, newPhase in
+            switch newPhase {
+            case .background:
+                discovery.stop()
+                UIApplication.shared.isIdleTimerDisabled = false
+                beginBackgroundLeaseIfNeeded()
+            case .active:
+                endBackgroundLease()
+                server.resumeIfNeeded()
+                updateKeepAlive()
+                UIApplication.shared.isIdleTimerDisabled = server.isRunning
+                if !server.isRunning {
+                    discovery.start()
+                }
+            case .inactive:
+                break
+            @unknown default:
+                break
+            }
+        }
+    }
+
+    private func updateKeepAlive() {
+        keepAlive.update(
+            isConnected: server.isRunning,
+            enabled: appConfig.localDebugKeepAliveInBackground
+        )
+    }
+
+    private func beginBackgroundLeaseIfNeeded() {
+        guard server.isAutoReconnectEnabled, backgroundLease == nil else { return }
+        backgroundLease = ApplicationBackgroundTaskLease(name: "local-debug") {
+            backgroundLease = nil
+            if !keepAlive.isActive {
+                server.suspendForBackground()
+            }
+        }
+    }
+
+    private func endBackgroundLease() {
+        backgroundLease?.end()
+        backgroundLease = nil
     }
 
     private var trimmedServerURL: String {
@@ -270,6 +338,8 @@ struct LocalDebugView: View {
     }
     
     private func disconnectServer() {
+        endBackgroundLease()
+        keepAlive.stop()
         server.disconnect()
         discovery.start()
         UIApplication.shared.isIdleTimerDisabled = false

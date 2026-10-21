@@ -73,6 +73,8 @@ public class LocalDebugServer: ObservableObject {
     @Published public internal(set) var isProcessingCommand = false
     @Published public internal(set) var isDisconnecting = false
 
+    public var isAutoReconnectEnabled: Bool { autoReconnectEnabled }
+
     let logger = Logger(subsystem: "com.ETOS.LLM.Studio", category: "LocalDebugServer")
     var wsConnection: NWConnection?
     let queue = DispatchQueue(label: "com.etos.localdebug", qos: .userInitiated)
@@ -102,6 +104,7 @@ public class LocalDebugServer: ObservableObject {
 
     var wsAutoFallbackEnabled = false
     var wsFallbackPort = "7654"
+    var isSuspendedForBackground = false
     var autoReconnectEnabled = false
     var reconnectTarget: DebugConnectionTarget?
     var reconnectTask: Task<Void, Never>?

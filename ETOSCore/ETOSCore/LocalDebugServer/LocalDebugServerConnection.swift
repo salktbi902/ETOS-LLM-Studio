@@ -55,7 +55,7 @@ extension LocalDebugServer {
     /// - Parameter url: 服务器地址，格式: "192.168.1.100:7654" 或 "192.168.1.100"
     @MainActor
     public func connect(to url: String) {
-        guard !isRunning, !isDisconnecting else { return }
+        guard !isRunning, !isDisconnecting, !isSuspendedForBackground else { return }
 
         let parsed = parseDebugAddress(url)
         cancelScheduledReconnect(resetAttempt: true)
@@ -157,7 +157,35 @@ extension LocalDebugServer {
     /// 断开连接
     @MainActor
     public func disconnect() {
+        isSuspendedForBackground = false
         stopAutoReconnect()
+        stopConnectionTransport()
+    }
+
+    /// 系统后台额度耗尽时只关闭传输，保留用户的连接地址与自动重连意图。
+    public func suspendForBackground() {
+        guard !isSuspendedForBackground else { return }
+        isSuspendedForBackground = true
+        cancelScheduledReconnect(resetAttempt: false)
+        stopConnectionTransport()
+    }
+
+    /// 回到前台时立即重连，不沿用后台前的重连退避。
+    public func resumeIfNeeded() {
+        let wasSuspended = isSuspendedForBackground
+        isSuspendedForBackground = false
+        guard autoReconnectEnabled, !isRunning, let target = reconnectTarget else { return }
+        // 权限弹窗等短暂失活不应替换尚在连接中的传输。
+        guard wasSuspended || (httpSession == nil && wsConnection == nil) else { return }
+        cancelScheduledReconnect(resetAttempt: true)
+        if target.useHTTP {
+            performHTTPConnection(host: target.host, port: target.port)
+        } else {
+            performConnection(host: target.host, port: target.port)
+        }
+    }
+
+    private func stopConnectionTransport() {
         invalidateConnectionToken()
         httpPollingTimer?.invalidate()
         httpPollingTimer = nil
@@ -166,8 +194,6 @@ extension LocalDebugServer {
         wsConnection?.cancel()
         wsConnection = nil
 
-        httpPollingTimer?.invalidate()
-        httpPollingTimer = nil
         httpSession?.invalidateAndCancel()
         httpSession = nil
 
@@ -245,11 +271,12 @@ extension LocalDebugServer {
 
     @MainActor
     func isCurrentConnection(_ token: UUID) -> Bool {
-        connectionToken == token
+        !isSuspendedForBackground && connectionToken == token
     }
 
     @MainActor
     func handleConnectionLost(errorMessage: String?) {
+        guard !isSuspendedForBackground else { return }
         invalidateConnectionToken()
         httpPollingTimer?.invalidate()
         httpPollingTimer = nil
@@ -270,10 +297,11 @@ extension LocalDebugServer {
 
     @MainActor
     func scheduleReconnectIfNeeded() {
-        guard autoReconnectEnabled, reconnectTask == nil, let target = reconnectTarget else { return }
+        guard !isSuspendedForBackground, autoReconnectEnabled, reconnectTask == nil, let target = reconnectTarget else { return }
         reconnectAttempt += 1
         let attempt = reconnectAttempt
         let interval = reconnectInterval
+        let token = connectionToken
         let delaySeconds = Int(interval)
         connectionStatus = String(
             format: NSLocalizedString("重连中（第%d次，约 %ds）", comment: "Local debug reconnect status"),
@@ -285,9 +313,9 @@ extension LocalDebugServer {
             try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
             guard !Task.isCancelled else { return }
             await MainActor.run { [weak self] in
-                guard let self else { return }
+                guard let self, !Task.isCancelled, self.isCurrentConnection(token) else { return }
                 self.reconnectTask = nil
-                guard self.autoReconnectEnabled, !self.isRunning else { return }
+                guard !self.isSuspendedForBackground, self.autoReconnectEnabled, !self.isRunning else { return }
                 if target.useHTTP {
                     self.performHTTPConnection(host: target.host, port: target.port)
                 } else {

@@ -124,6 +124,7 @@ extension AppConfigStore {
         case .enableSpeechInput: enableSpeechInput = value
         case .backgroundGenerationKeepAliveEnabled: backgroundGenerationKeepAliveEnabled = value
         case .backgroundGenerationAudioKeepAliveEnabled: backgroundGenerationAudioKeepAliveEnabled = value
+        case .localDebugKeepAliveInBackground: localDebugKeepAliveInBackground = value
         case .continueTTSPlaybackInBackground: continueTTSPlaybackInBackground = value
         case .ttsCacheNetworkAudioForReplay: ttsCacheNetworkAudioForReplay = value
         case .ttsFilterCodeAndHTML: ttsFilterCodeAndHTML = value
