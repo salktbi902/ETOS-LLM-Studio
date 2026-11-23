@@ -114,3 +114,7 @@ docs/landing/dist/
 
 # Node JS Package Lock
 */**/package-lock.json
+
+# Generated skill copies for other harnesses (installer output)
+/.agents/
+/agent/
