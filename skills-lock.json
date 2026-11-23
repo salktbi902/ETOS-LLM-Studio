@@ -567,6 +567,13 @@
       "sourceType": "github",
       "skillPath": "skills/why/SKILL.md",
       "computedHash": "2050d10fff1d0fa6e19c0a96552a641af6a24f012614955a6dcf3763bf54ac3c"
+    },
+    "xbloom-studio-recipe": {
+      "source": "ryunana/xbloom-studio-recipe-skill",
+      "commit": "5c429fa9061353f3750735031cd3b36686e6c151",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "0227e6c23f871e0c9680f1a18035c8a4969db51dae8120d659d140241a81cad4"
     }
   }
 }
