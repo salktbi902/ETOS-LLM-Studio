@@ -1,6 +1,13 @@
 {
   "version": 2,
   "skills": {
+    "arena": {
+      "source": "backnotprop/pstack",
+      "commit": "c3464c11c60b1352d5e8f5f0428a3a6943837568",
+      "sourceType": "github",
+      "skillPath": "skills/arena/SKILL.md",
+      "computedHash": "04d30480b2cb26cc5b8909528bd14d94405fa11f0ae603da9b08da79746dbf91"
+    },
     "cavecrew": {
       "source": "JuliusBrussee/caveman",
       "commit": "b89752f6bca5a26bfde8b019813554241800ca99",
