@@ -1,0 +1,753 @@
+<title>مساعد تحميص Behmor</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@500;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Share+Tech+Mono&display=swap">
+<style>
+/* Layout: phone-first column that mirrors the machine — green display, light control plate, then the timeline; the agent and the log follow. Two columns from 960px. */
+:root{
+  --body:#121416; --panel:#1a1d20; --field:#23272b; --agent:#1e2521; --line:#2e3439;
+  --ink:#e8ecee; --muted:#9ba5ac; --shadow:rgba(0,0,0,.55);
+  --glass:#0a0e09; --vfd:#9af25e; --vfd-ghost:#1d2a17; --vfd-glow:rgba(154,242,94,.35);
+  --ember:#ff7a2b; --ember-ink:#1b0c03;
+  --plate:#e8e6df; --plate-field:#f6f5f1; --plate-line:#b9b6ad; --plate-ink:#24272b; --plate-muted:#5f6367;
+  --ring:#cf3a2e; --go:#2b9348; --cool:#3257c8; --cool-ink:#eef2ff; --yellow:#f2c230;
+  --display:"Readex Pro","IBM Plex Sans Arabic",system-ui,sans-serif;
+  --text:"IBM Plex Sans Arabic",system-ui,sans-serif;
+  --digits:"Share Tech Mono",ui-monospace,"SFMono-Regular",monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--body);color:var(--ink);font:15px/1.6 var(--text);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+.wrap{max-width:1120px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+h1{font:700 1.6rem/1.2 var(--display);margin:0;text-wrap:balance}
+h2{font:600 1.02rem/1.3 var(--display);margin:0}
+.sub{color:var(--muted);margin:4px 0 0;max-width:62ch}
+.chip{font:600 .8rem var(--text);padding:4px 12px;border-radius:999px;background:var(--panel);border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.chip[data-phase="roasting"]{background:var(--ember);border-color:var(--ember);color:var(--ember-ink)}
+.chip[data-phase="cooling"]{background:var(--cool);border-color:var(--cool);color:var(--cool-ink)}
+.chip[data-phase="done"]{color:var(--vfd);border-color:var(--vfd)}
+.grid{display:grid;gap:18px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:960px){.grid{grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);align-items:start}}
+.col{display:flex;flex-direction:column;gap:18px;min-width:0}
+
+/* Display */
+.display{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:12px}
+.vfd{background:var(--glass);border-radius:12px;padding:12px 16px 10px;box-shadow:inset 0 2px 14px var(--shadow);display:flex;flex-direction:column;gap:2px}
+.vfd-tags{display:flex;gap:12px;justify-content:flex-end;font:400 .95rem var(--digits);direction:ltr}
+.vfd-tags span{color:var(--vfd-ghost)}
+.vfd-tags .lit{color:var(--vfd)}
+.digits{position:relative;font:400 clamp(3.6rem,19vw,6.4rem)/1.05 var(--digits);letter-spacing:.04em;text-align:center;font-variant-numeric:tabular-nums;direction:ltr}
+.digits .ghost{position:absolute;inset:0;color:var(--vfd-ghost);pointer-events:none}
+.digits .now{position:relative;color:var(--vfd);text-shadow:0 0 18px var(--vfd-glow)}
+.vfd-sub{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:.8rem;flex-wrap:wrap}
+.vfd-sub .warn{color:var(--vfd)}
+.meta{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+@media (max-width:520px){.meta{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.meta div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.meta span{font-size:.72rem;color:var(--muted)}
+.meta b{font:400 1.05rem var(--digits);font-weight:400;color:var(--ink);font-variant-numeric:tabular-nums}
+.bar{position:relative;height:10px;border-radius:999px;background:var(--line);margin-top:16px}
+.fill{position:absolute;inset-block:0;inset-inline-start:0;width:0;border-radius:999px;background:var(--ember)}
+.mark{position:absolute;top:-5px;bottom:-5px;width:2px;background:var(--ink)}
+.mark::after{content:attr(data-l);position:absolute;bottom:calc(100% + 2px);transform:translateX(50%);font:400 .66rem var(--digits);color:var(--muted);white-space:nowrap}
+.mark.fc{background:var(--yellow)} .mark.sc{background:var(--ring)}
+@media (prefers-reduced-motion:no-preference){.blink .now{animation:blink 1s steps(2,start) infinite}}
+@keyframes blink{to{visibility:hidden}}
+
+/* Alerts */
+.alert{background:var(--ember);color:var(--ember-ink);border-radius:14px;padding:14px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 14px;align-items:center}
+.alert.info{background:var(--panel);color:var(--ink);border:1px solid var(--ember)}
+.alert b{font:700 1.12rem var(--display)}
+.alert p{margin:2px 0 0}
+.alert-count{font:400 2.6rem/1 var(--digits);direction:ltr}
+.alert-actions{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap}
+.alert-actions:empty{display:none}
+.alert-actions button{background:var(--ember-ink);color:var(--ember);border:0;border-radius:10px;padding:9px 14px;font:700 .95rem var(--text);cursor:pointer}
+.alert.info .alert-actions button{background:var(--field);color:var(--ink);border:1px solid var(--line)}
+
+/* Control plate */
+.plate{background:var(--plate);color:var(--plate-ink);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:14px}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.plbl{font:600 .78rem var(--text);letter-spacing:.02em;color:var(--plate-muted);min-width:5.5rem}
+.plate input{flex:1 1 160px;min-width:0;background:var(--plate-field);color:var(--plate-ink);border:1px solid var(--plate-line);border-radius:10px;padding:8px 10px;font:inherit}
+.plate input::placeholder{color:var(--plate-muted)}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.rb{width:52px;height:52px;border-radius:50%;border:2px solid var(--plate-line);background:var(--plate-field);color:var(--plate-ink);font:400 1rem var(--digits);cursor:pointer}
+.rb[aria-pressed="true"]{border:3px solid var(--ring)}
+.rb:disabled,.pill:disabled,.big:disabled{opacity:.4;cursor:not-allowed}
+.hint{flex-basis:100%;margin:0;color:var(--plate-muted);font-size:.85rem}
+.pill{border:1px solid var(--plate-line);background:var(--plate-field);color:var(--plate-ink);border-radius:999px;padding:7px 14px;font:600 .88rem var(--text);cursor:pointer}
+.sync{display:flex;flex-wrap:wrap;align-items:center;gap:8px;flex-basis:100%}
+.sync input{flex:0 1 6.5rem}
+.actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+@media (max-width:520px){.actions{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.big{min-height:56px;border-radius:999px;font:700 1rem var(--text);cursor:pointer;background:var(--plate-field);color:var(--plate-ink);border:3px solid var(--plate-line);padding:6px 10px}
+.big.start{border-color:var(--go);letter-spacing:.08em}
+.big.cool{border-color:var(--cool);letter-spacing:.08em}
+.big.ev{background:var(--yellow);border-color:var(--ring)}
+.msgline{flex-basis:100%;margin:0;font-size:.85rem;color:var(--ring);min-height:1.2em}
+
+/* Cards */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.tl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.tl li{display:grid;grid-template-columns:4.2rem minmax(0,1fr);gap:10px;align-items:baseline}
+.tl time{font:400 .95rem var(--digits);color:var(--vfd);direction:ltr;text-align:right}
+.tl .v{color:var(--muted)}
+.empty{color:var(--muted);margin:0}
+.cooltimer{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.cooltimer b{font:400 1.8rem var(--digits);color:var(--cool-ink);direction:ltr}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:8px}
+.stat{background:var(--field);border-radius:10px;padding:8px 10px;min-width:0}
+.stat span{display:block;font-size:.72rem;color:var(--muted)}
+.stat b{font:400 1.1rem var(--digits);direction:ltr;display:block;text-align:right}
+.form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.form .full{grid-column:1/-1}
+@media (max-width:520px){.form{grid-template-columns:minmax(0,1fr)}}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label{font-size:.8rem;color:var(--muted)}
+.card input,.card select,.card textarea{background:var(--field);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font:inherit;width:100%}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.primary{background:var(--vfd);color:var(--glass);border:0;border-radius:10px;padding:10px 16px;font:700 .95rem var(--text);cursor:pointer}
+.primary:disabled{opacity:.5;cursor:not-allowed}
+.dbtn{background:transparent;color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:9px 14px;font:600 .9rem var(--text);cursor:pointer}
+.dbtn:disabled{opacity:.45;cursor:not-allowed}
+.toast{min-height:1.2em;margin:0;color:var(--vfd);font-size:.88rem}
+
+/* Agent */
+.agent-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.tog{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:.85rem;cursor:pointer}
+.tog input{width:auto;accent-color:var(--vfd)}
+.msgs{display:flex;flex-direction:column;gap:8px;max-height:min(52vh,460px);overflow-y:auto}
+.msg{padding:9px 12px;border-radius:12px;max-width:92%;white-space:pre-wrap;overflow-wrap:anywhere}
+.msg.user{align-self:flex-start;background:var(--field)}
+.msg.agent{align-self:flex-end;background:var(--agent);border:1px solid var(--line)}
+.msg.sys{align-self:stretch;max-width:none;color:var(--muted);padding:0;font-size:.9rem}
+.msg.pending{color:var(--muted)}
+.msg a,.links a,.src a{color:var(--vfd)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips button{background:var(--field);color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font:500 .85rem var(--text);cursor:pointer}
+.chips button:disabled{opacity:.45;cursor:not-allowed}
+.ask{display:flex;flex-direction:column;gap:8px}
+.ask textarea{resize:vertical;min-height:3.2em}
+.partial{margin:0;color:var(--muted);font-size:.85rem;min-height:1.1em}
+
+/* Log */
+.log{display:flex;flex-direction:column;gap:10px}
+.lr{border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.lr-head{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline}
+.lr h3{font:600 .98rem var(--display);margin:0}
+.lr .when{color:var(--muted);font-size:.8rem}
+.tags{display:flex;gap:6px;flex-wrap:wrap}
+.tags span{font:400 .82rem var(--digits);background:var(--field);border-radius:999px;padding:2px 9px}
+.lr p{margin:0;color:var(--muted);font-size:.88rem;overflow-wrap:anywhere}
+.links{display:flex;gap:12px;flex-wrap:wrap;font-size:.88rem;align-items:center}
+.linkbtn{background:none;border:0;color:var(--muted);font:inherit;cursor:pointer;padding:0;text-decoration:underline}
+.src summary{cursor:pointer;font:600 .95rem var(--display)}
+.src ul{margin:0;padding-inline-start:18px;color:var(--muted);font-size:.88rem;display:flex;flex-direction:column;gap:6px}
+
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px solid var(--vfd);outline-offset:2px}
+.plate :focus-visible{outline-color:var(--cool)}
+</style>
+
+<div class="wrap" dir="rtl">
+  <header class="top">
+    <div>
+      <h1>مساعد تحميص Behmor</h1>
+      <p class="sub">مؤقت يمشي مع شاشة المحمصة، وينبهك بالصوت في اللحظات المهمة، ويسجّل كل تحميصة. ومعه وكيل تسأله وأنت تحمّص.</p>
+    </div>
+    <span class="chip" id="phaseChip" data-phase="setup">جاهز</span>
+  </header>
+
+  <div class="grid">
+    <div class="col">
+      <section class="display" aria-label="شاشة المؤقت">
+        <div class="vfd" id="vfd">
+          <div class="vfd-tags"><span id="tagW" class="lit">400</span><span id="tagP" class="lit">P5</span><span id="tagM">MAN</span></div>
+          <div class="digits"><span class="ghost" aria-hidden="true">88:88</span><span class="now" id="remain">23:30</span></div>
+          <div class="vfd-sub"><span id="remainLbl">الوقت المتبقي</span><span id="minuteHint" class="warn" hidden>باقي أقل من دقيقة. زد بـ + إذا تبي تكمل</span></div>
+        </div>
+        <div class="meta">
+          <div><span>مضى</span><b id="elapsed">00:00</b></div>
+          <div><span>الوقت المضبوط</span><b id="setT">23:30</b></div>
+          <div><span>الحد الأقصى</span><b id="maxT">25:30</b></div>
+          <div><span>تنبيه START عند</span><b id="checkT">17:37</b></div>
+        </div>
+        <div class="bar" aria-hidden="true">
+          <div class="fill" id="fill"></div>
+          <div class="mark" id="m75" data-l="START" style="inset-inline-start:75%"></div>
+          <div class="mark fc" id="mFC" data-l="1C" hidden></div>
+          <div class="mark sc" id="mSC" data-l="2C" hidden></div>
+        </div>
+      </section>
+
+      <section class="alert" id="alert" role="alert" hidden>
+        <div><b id="alertTitle"></b><p id="alertText"></p></div>
+        <div class="alert-count" id="alertCount"></div>
+        <div class="alert-actions" id="alertActions"></div>
+      </section>
+
+      <section class="plate" aria-label="لوحة التحكم">
+        <div class="row">
+          <label class="plbl" for="bean">البن</label>
+          <input id="bean" type="text" placeholder="مثلًا: إثيوبيا يرغاتشيفي مغسول" autocomplete="off">
+        </div>
+        <div class="row">
+          <span class="plbl">الوزن (جرام)</span>
+          <div class="btns" id="wBtns">
+            <button type="button" class="rb" data-w="100" aria-pressed="false">100</button>
+            <button type="button" class="rb" data-w="200" aria-pressed="false">200</button>
+            <button type="button" class="rb" data-w="400" aria-pressed="true">400</button>
+          </div>
+        </div>
+        <div class="row">
+          <span class="plbl">البروفايل</span>
+          <div class="btns" id="pBtns">
+            <button type="button" class="rb" data-p="P1" aria-pressed="false">P1</button>
+            <button type="button" class="rb" data-p="P2" aria-pressed="false">P2</button>
+            <button type="button" class="rb" data-p="P3" aria-pressed="false">P3</button>
+            <button type="button" class="rb" data-p="P4" aria-pressed="false">P4</button>
+            <button type="button" class="rb" data-p="P5" aria-pressed="true">P5</button>
+          </div>
+          <p class="hint" id="pHint"></p>
+        </div>
+        <div class="row">
+          <span class="plbl">الوقت</span>
+          <div class="btns">
+            <button type="button" class="pill" id="plus">+15 ث</button>
+            <button type="button" class="pill" id="minus">−10 ث</button>
+          </div>
+          <div class="sync">
+            <label class="plbl" for="syncIn">المتبقي على شاشة المحمصة</label>
+            <input id="syncIn" type="text" inputmode="numeric" placeholder="12:44" dir="ltr" autocomplete="off">
+            <button type="button" class="pill" id="syncBtn">طابق</button>
+          </div>
+          <p class="msgline" id="timeMsg" role="status"></p>
+        </div>
+        <div class="actions">
+          <button type="button" class="big start" id="startBtn">START</button>
+          <button type="button" class="big ev" id="fcBtn" disabled>الكراك الأول</button>
+          <button type="button" class="big ev" id="scBtn" disabled>الكراك الثاني</button>
+          <button type="button" class="big cool" id="coolBtn" disabled>COOL</button>
+        </div>
+        <div class="row">
+          <label class="plbl" for="tempIn">قراءة حرارة</label>
+          <input id="tempIn" type="number" inputmode="decimal" placeholder="°C" dir="ltr">
+          <button type="button" class="pill" id="tA" disabled>A عادم</button>
+          <button type="button" class="pill" id="tB" disabled>B جدار</button>
+        </div>
+      </section>
+
+      <section class="card" aria-label="مجريات التحميصة">
+        <h2>مجريات التحميصة</h2>
+        <ol class="tl" id="timeline"></ol>
+        <p class="empty" id="tlEmpty">اضغط START هنا وعلى المحمصة بنفس اللحظة، وتنسجل الأحداث هنا بوقتها.</p>
+      </section>
+
+      <section class="card" id="finish" hidden>
+        <h2>بعد التحميص</h2>
+        <div class="cooltimer" id="coolBox">
+          <span>التبريد</span><b id="coolT">00:00</b>
+          <button type="button" class="dbtn" id="coolDone">خلص التبريد</button>
+        </div>
+        <div class="stats" id="stats"></div>
+        <div class="form">
+          <div class="field"><label for="greenG">وزن البن الأخضر (g)</label><input id="greenG" type="number" inputmode="decimal" dir="ltr"></div>
+          <div class="field"><label for="roastedG">وزنه بعد التحميص (g)</label><input id="roastedG" type="number" inputmode="decimal" dir="ltr"></div>
+          <div class="field full"><label for="level">درجة التحميص</label>
+            <select id="level">
+              <option value="">اختر</option>
+              <option value="city">City (فاتح)</option>
+              <option value="city+">City+ (فاتح إلى متوسط)</option>
+              <option value="full-city">Full City (متوسط)</option>
+              <option value="full-city+">Full City+ (متوسط إلى غامق)</option>
+              <option value="dark">غامق</option>
+            </select>
+          </div>
+          <div class="field full"><label for="notes">ملاحظات</label><textarea id="notes" rows="3" placeholder="الريحة، اللون، متى بدأ الدخان…"></textarea></div>
+        </div>
+        <div class="btnrow">
+          <button type="button" class="primary" id="saveBtn">احفظ في السجل</button>
+          <button type="button" class="dbtn" id="newBtn">تحميصة جديدة</button>
+        </div>
+        <div class="btnrow" id="newConfirm" hidden>
+          <span>التحميصة ما انحفظت. تبدأ من جديد؟</span>
+          <button type="button" class="dbtn" id="newYes">إيه، ابدأ</button>
+          <button type="button" class="dbtn" id="newNo">لا</button>
+        </div>
+        <p class="toast" id="saveMsg" role="status"></p>
+      </section>
+    </div>
+
+    <div class="col">
+      <section class="card agent" aria-label="وكيل التحميص">
+        <div class="agent-head">
+          <h2>وكيل التحميص</h2>
+          <label class="tog" id="speakWrap" hidden><input type="checkbox" id="speakTog" checked> <span>تنبيهات وردود بالصوت</span></label>
+        </div>
+        <div class="msgs" id="msgs" aria-live="polite">
+          <div class="msg sys">اسألني وأنت تحمّص. أشوف المؤقت والأحداث والسجل من الصفحة، وإذا قلت «بدأ الكراك الأول» أسجّله وأضبط الوقت.</div>
+        </div>
+        <p class="empty" id="agentState">يتصل…</p>
+        <div class="chips" id="chips">
+          <button type="button" disabled>وش أسوي الحين؟</button>
+          <button type="button" disabled>متى أضغط COOL؟</button>
+          <button type="button" disabled>أي بروفايل يناسب البن؟</button>
+          <button type="button" disabled>وصفة xBloom لآخر تحميصة</button>
+        </div>
+        <form class="ask" id="askForm">
+          <label class="empty" for="askIn">رسالتك</label>
+          <textarea id="askIn" rows="2" placeholder="مثلًا: بدأ الكراك الأول" disabled></textarea>
+          <p class="partial" id="partial"></p>
+          <div class="btnrow">
+            <button type="submit" class="primary" id="sendBtn" disabled>أرسل</button>
+            <button type="button" class="dbtn" id="micBtn" hidden aria-pressed="false">تكلّم</button>
+            <button type="button" class="dbtn" id="stopBtn" hidden>وقّف الرد</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card" aria-label="سجل التحميصات">
+        <h2>سجل التحميصات</h2>
+        <div class="log" id="log"><p class="empty">يحمّل السجل…</p></div>
+      </section>
+
+      <details class="card src">
+        <summary>المصدر وحدود الصفحة</summary>
+        <ul>
+          <li>الأوقات والبروفايلات وتنبيه 75% ووقت الكراك الثاني المتوقع من <a href="https://www.seattlecoffeegear.com/cdn/shop/files/behmor-1600-plus-roaster-user-manual.pdf" target="_blank" rel="noopener">كتيّب Behmor 1600 Plus</a> (إصدار V7.4).</li>
+          <li>الصفحة ما تتحكم بالمحمصة. المؤقت يمشي بالتوازي معها، فاضغط أزرارها هنا مع أزرار المحمصة.</li>
+          <li>لا تترك المحمصة بدون مراقبة، ولا تطفيها قبل ما يكمل التبريد. إذا اشتعل البن لا تفتح الباب: اطفها وافصل الكهرباء.</li>
+        </ul>
+      </details>
+    </div>
+  </div>
+</div>
+
+<script>
+const KEY = "behmor-roast-v1", SPEAK_KEY = "behmor-speak";
+const RECIPES = "https://claude.ai/artifact/2gW7c5NSnKB11YwcS35Y2h";
+// Start / max roast time in seconds per weight button and profile (Behmor 1600 Plus manual).
+const TIMES = {
+  100:{P1:[510,600],P2:[570,630],P3:[600,660],P4:[620,690],P5:[645,750]},
+  200:{P1:[720,810],P2:[780,870],P3:[840,930],P4:[880,990],P5:[930,1050]},
+  400:{P1:[1080,1230],P2:[1200,1350],P3:[1290,1410],P4:[1360,1470],P5:[1410,1530]}
+};
+// "Rosetta Stone": approximate time from the start of 1st crack to the start of 2nd crack.
+const ROSETTA = {100:90, 200:130, 400:190};
+const POWER = {P1:0, P2:25, P3:50, P4:75, P5:100};
+const HINTS = {
+  P1:"أعلى حرارة وأسرع تحميص. للبن الصلب: أمريكا الوسطى وكولومبيا وبيرو.",
+  P2:"حرارة عالية. للبن الصلب: أمريكا الوسطى وكولومبيا وبيرو.",
+  P3:"للبرازيلي والأفريقي وجنوب شرق آسيا.",
+  P4:"للبن الجزري المنخفض مثل Kona، لين بداية الكراك الثاني.",
+  P5:"أهدأ حرارة وأبطأ تحميص. للبن الجزري المنخفض، والإيقاف قبل الكراك الثاني."
+};
+const LEVELS = {"city":["City (فاتح)","light"],"city+":["City+ (فاتح إلى متوسط)","light"],"full-city":["Full City (متوسط)","medium"],"full-city+":["Full City+ (متوسط إلى غامق)","dark"],"dark":["غامق","dark"]};
+const EV = {start:"بداية التحميص", adj:"تعديل الوقت", sync:"مطابقة مع الشاشة", check:"ضغطت START عند 75%", fc:"الكراك الأول", sc:"الكراك الثاني", cool:"COOL: بداية التبريد", end:"انتهى الوقت ودخلت التبريد", ta:"حرارة A (عادم)", tb:"حرارة B (جدار)", note:"ملاحظة", door:"فتحت الباب للتبريد", power:"وضع يدوي: قوة", auto:"رجوع للوضع التلقائي"};
+const PHASE = {setup:"جاهز", roasting:"يحمّص", cooling:"تبريد", done:"خلصت"};
+
+const $ = s => document.querySelector(s);
+const use = name => (window.claude && window.claude.use) ? window.claude.use(name).catch(() => null) : Promise.resolve(null);
+const fresh = () => ({phase:"setup", weight:400, profile:"P5", setTime:TIMES[400].P5[0], initialSet:null, startedAt:null, events:[], checkDone:false, checkAlerted:false, fc:null, sc:null, drop:null, coolAt:null, coolNotified:false, doorOpened:false, manual:null, bean:"", greenG:"", roastedG:"", level:"", notes:"", savedId:null});
+let S = fresh();
+
+const maxT = () => TIMES[S.weight][S.profile][1];
+function elapsed(){ return (S.phase === "roasting" && S.startedAt) ? Math.max(0, (Date.now() - S.startedAt) / 1000) : (S.drop ?? 0); }
+function fmt(sec){ if (sec == null || !isFinite(sec)) return "--:--"; const s = Math.max(0, Math.floor(sec)); return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); }
+const fmtUp = sec => fmt(sec == null ? sec : Math.ceil(sec - 1e-9));
+function parseMMSS(str){ const m = String(str).trim().replace(/[٠-٩]/g, d => "٠١٢٣٤٥٦٧٨٩".indexOf(d)).match(/^(\d{1,2})[:.](\d{2})$/); if (!m || +m[2] > 59) return null; return +m[1] * 60 + +m[2]; }
+function log(type, v){ S.events.push({type, t:Math.round(elapsed()), v: v ?? null}); if (S.events.length > 200) S.events.shift(); }
+function persist(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+function timeMsg(t){ $("#timeMsg").textContent = t || ""; }
+
+/* ---------- sound, speech, screen ---------- */
+let actx = null, tts = null, wake = null;
+function unlockAudio(){ try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === "suspended") actx.resume(); } catch (e) {} }
+function beep(n){ if (!actx) return; try { for (let i = 0; i < n; i++) { const o = actx.createOscillator(), g = actx.createGain(); o.type = "square"; o.frequency.value = 880; g.gain.value = 0.06; o.connect(g); g.connect(actx.destination); const t0 = actx.currentTime + i * 0.28; o.start(t0); o.stop(t0 + 0.16); } } catch (e) {} }
+function speakOn(){ return $("#speakTog").checked; }
+function say(text){ if (!tts || !speakOn()) return; tts.speak(String(text).slice(0, 2000)).catch(() => {}); }
+async function keepAwake(){ try { if (!navigator.wakeLock || wake) return; wake = await navigator.wakeLock.request("screen"); wake.addEventListener("release", () => { wake = null; }); } catch (e) { wake = null; } }
+function releaseWake(){ try { if (wake) wake.release(); } catch (e) {} wake = null; }
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && (S.phase === "roasting" || S.phase === "cooling")) keepAwake(); });
+document.addEventListener("pointerdown", unlockAudio, {once:true});
+
+/* ---------- roast actions (shared by buttons and the agent) ---------- */
+function setWeight(w){
+  if (S.phase === "roasting") { if (w === 400 && S.manual != null) { S.manual = null; log("auto"); persist(); renderAll(); } return; }
+  if (S.phase !== "setup") return;
+  S.weight = w; S.setTime = TIMES[w][S.profile][0]; timeMsg(""); persist(); renderAll();
+}
+function setProfile(p){
+  if (S.phase === "roasting") { S.manual = POWER[p]; log("power", POWER[p] + "%"); persist(); renderAll(); return; }
+  if (S.phase !== "setup") return;
+  S.profile = p; S.setTime = TIMES[S.weight][p][0]; timeMsg(""); persist(); renderAll();
+}
+function applyAdjust(delta){
+  if (S.phase !== "setup" && S.phase !== "roasting") return false;
+  const min = S.phase === "roasting" ? Math.ceil(elapsed()) + 1 : 60;
+  const next = Math.min(maxT(), Math.max(min, S.setTime + delta));
+  if (next === S.setTime) { timeMsg(delta > 0 ? "وصلت الحد الأقصى لهذا البروفايل (" + fmt(maxT()) + ")." : "ما ينفع تنقص أكثر."); return false; }
+  S.setTime = next; timeMsg("");
+  if (S.phase === "roasting") log("adj", (delta > 0 ? "+" : "") + delta + " ث، المتبقي " + fmtUp(S.setTime - elapsed()));
+  persist(); renderAll(); return true;
+}
+function applySync(r){
+  if (S.phase === "setup") S.setTime = Math.min(maxT(), Math.max(60, r));
+  else if (S.phase === "roasting") { S.setTime = Math.min(maxT(), Math.round(elapsed() + r)); log("sync", fmt(r)); }
+  else return false;
+  timeMsg(""); persist(); renderAll(); return true;
+}
+function startRoast(){
+  if (S.phase !== "setup") return;
+  unlockAudio();
+  Object.assign(S, {phase:"roasting", startedAt:Date.now(), initialSet:S.setTime, events:[], checkDone:false, checkAlerted:false, fc:null, sc:null, drop:null, coolAt:null, coolNotified:false, doorOpened:false, manual:null, savedId:null, roastedG:"", level:"", notes:""});
+  if (!S.greenG) S.greenG = S.weight;
+  log("start", S.weight + "g · " + S.profile + " · " + fmt(S.setTime));
+  fillInputs(); keepAwake(); persist(); renderAll();
+}
+function markFC(){
+  if (S.phase !== "roasting" || S.fc != null) return false;
+  const e = elapsed(); S.fc = Math.round(e);
+  S.setTime = Math.max(Math.ceil(e) + 1, Math.round(Math.min(maxT(), e + ROSETTA[S.weight])));
+  log("fc", "المتبقي صار " + fmtUp(S.setTime - e));
+  beep(2); say("الكراك الأول. اضغط C على المحمصة، أو خل المتبقي " + fmtUp(S.setTime - e));
+  persist(); renderAll(); return true;
+}
+function markSC(){
+  if (S.phase !== "roasting" || S.sc != null) return false;
+  S.sc = Math.round(elapsed()); log("sc");
+  beep(3); say("الكراك الثاني. اضغط COOL خلال عشر ثواني.");
+  persist(); renderAll(); return true;
+}
+function doCool(auto){
+  if (S.phase !== "roasting") return false;
+  S.drop = Math.round(auto ? S.setTime : elapsed());
+  Object.assign(S, {phase:"cooling", coolAt:Date.now(), coolNotified:false, doorOpened:false});
+  log(auto ? "end" : "cool");
+  beep(auto ? 2 : 1); if (auto) say("انتهى الوقت، والمحمصة دخلت التبريد.");
+  persist(); renderAll(); return true;
+}
+function coolDone(){ if (S.phase !== "cooling") return; S.phase = "done"; releaseWake(); persist(); renderAll(); }
+function confirmCheck(){ if (S.phase !== "roasting" || S.checkDone) return; S.checkDone = true; log("check"); persist(); renderAll(); }
+function openDoor(){ if (S.phase !== "cooling" || S.doorOpened) return; S.doorOpened = true; log("door", fmt((Date.now() - S.coolAt) / 1000)); persist(); renderAll(); }
+function logTemp(kind){
+  const v = parseFloat($("#tempIn").value);
+  if (!isFinite(v)) { timeMsg("اكتب رقم الحرارة أول."); return; }
+  log(kind === "A" ? "ta" : "tb", Math.round(v) + "°"); $("#tempIn").value = ""; timeMsg(""); persist(); renderTimeline();
+}
+function newRoast(){ const keep = {weight:S.weight, profile:S.profile}; S = Object.assign(fresh(), keep, {setTime:TIMES[keep.weight][keep.profile][0]}); $("#newConfirm").hidden = true; $("#saveMsg").textContent = ""; fillInputs(); persist(); renderAll(); }
+
+/* ---------- rendering ---------- */
+function fillInputs(){ $("#bean").value = S.bean || ""; $("#greenG").value = S.greenG || ""; $("#roastedG").value = S.roastedG || ""; $("#level").value = S.level || ""; $("#notes").value = S.notes || ""; }
+function stats(){
+  const r = {total:S.drop, fc:S.fc, dev:null, dtr:null, loss:null};
+  if (S.drop != null && S.fc != null && S.drop > S.fc) { r.dev = S.drop - S.fc; r.dtr = Math.round(r.dev / S.drop * 1000) / 10; }
+  const g = parseFloat(S.greenG), w = parseFloat(S.roastedG);
+  if (g > 0 && w > 0 && w < g) r.loss = Math.round((g - w) / g * 1000) / 10;
+  return r;
+}
+function renderAll(){
+  const roasting = S.phase === "roasting", setup = S.phase === "setup", after = S.phase === "cooling" || S.phase === "done";
+  const chip = $("#phaseChip"); chip.textContent = PHASE[S.phase]; chip.dataset.phase = S.phase;
+  $("#tagW").textContent = S.weight; $("#tagP").textContent = S.profile;
+  $("#tagM").className = S.manual != null ? "lit" : ""; $("#tagM").textContent = S.manual != null ? "MAN " + S.manual + "%" : "MAN";
+  $("#setT").textContent = fmt(S.setTime); $("#maxT").textContent = fmt(maxT()); $("#checkT").textContent = fmt(0.75 * S.setTime);
+  document.querySelectorAll("#wBtns .rb").forEach(b => { const w = +b.dataset.w; b.setAttribute("aria-pressed", String(w === S.weight)); b.disabled = !(setup || (roasting && w === 400 && S.manual != null)); b.title = roasting && w === 400 ? "رجوع للوضع التلقائي" : ""; });
+  document.querySelectorAll("#pBtns .rb").forEach(b => { const p = b.dataset.p; b.setAttribute("aria-pressed", String(roasting && S.manual != null ? POWER[p] === S.manual : p === S.profile)); b.disabled = !(setup || roasting); });
+  $("#pHint").textContent = roasting ? "إذا غيّرت القوة يدويًا على المحمصة، اضغط نفس الزر هنا: P1 = 0%، P2 = 25%، P3 = 50%، P4 = 75%، P5 = 100%. وزر 400 يرجّعها للتلقائي." : HINTS[S.profile];
+  $("#plus").disabled = $("#minus").disabled = $("#syncBtn").disabled = !(setup || roasting);
+  $("#startBtn").disabled = !setup;
+  $("#fcBtn").disabled = !(roasting && S.fc == null);
+  $("#scBtn").disabled = !(roasting && S.sc == null);
+  $("#coolBtn").disabled = !roasting;
+  $("#tA").disabled = $("#tB").disabled = !(roasting || S.phase === "cooling");
+  $("#remainLbl").textContent = after ? "مدة التحميص" : "الوقت المتبقي";
+  $("#finish").hidden = !after;
+  $("#coolBox").hidden = S.phase !== "cooling";
+  renderStats(); renderTimeline(); lastAlertSig = ""; renderLive();
+}
+function renderStats(){
+  if (S.phase !== "cooling" && S.phase !== "done") return;
+  const r = stats(), box = $("#stats"); box.replaceChildren();
+  const items = [["مدة التحميص", fmt(r.total)], ["الكراك الأول", r.fc != null ? fmt(r.fc) : "—"], ["التطوير", r.dev != null ? fmt(r.dev) : "—"], ["نسبة التطوير", r.dtr != null ? r.dtr + "%" : "—"], ["فقد الوزن", r.loss != null ? r.loss + "%" : "—"]];
+  for (const [k, v] of items) { const d = document.createElement("div"); d.className = "stat"; const s = document.createElement("span"); s.textContent = k; const b = document.createElement("b"); b.textContent = v; d.append(s, b); box.append(d); }
+}
+function renderTimeline(){
+  const ol = $("#timeline"); ol.replaceChildren();
+  for (const e of S.events) {
+    const li = document.createElement("li"); const t = document.createElement("time"); t.textContent = fmt(e.t);
+    const s = document.createElement("span"); s.textContent = EV[e.type] || e.type;
+    if (e.v) { const v = document.createElement("span"); v.className = "v"; v.textContent = " · " + e.v; s.append(v); }
+    li.append(t, s); ol.append(li);
+  }
+  $("#tlEmpty").hidden = S.events.length > 0;
+}
+let lastAlertSig = "";
+function currentAlert(){
+  const e = elapsed();
+  if (S.phase === "roasting") {
+    if (S.sc != null) { const left = 10 - (e - S.sc); return {k:"sc", title:"الكراك الثاني", text:left > 0 ? "اضغط COOL قبل ما تخلص العشر ثواني." : "تجاوزت 10 ثواني داخل الكراك الثاني. اضغط COOL الحين.", count:left > 0 ? Math.ceil(left) : null, actions:[["COOL", () => doCool(false)]]}; }
+    const at = 0.75 * S.setTime;
+    if (!S.checkDone && e >= at) { const left = 30 - (e - at); return {k:"check", title:"اضغط START على المحمصة", text:left > 0 ? "الشاشة تومض un:30. عندك 30 ثانية، وإلا تدخل التبريد." : "إذا الشاشة تعرض err7 فالمحمصة دخلت التبريد، اضغط COOL هنا.", count:left > 0 ? Math.ceil(left) : null, actions:[["ضغطت START", confirmCheck], ["دخلت التبريد", () => doCool(false)]]}; }
+    if (S.fc != null && e - S.fc < 25) return {k:"fc", info:true, title:"الكراك الأول", text:"اضغط C على المحمصة، أو عدّل بـ + و− لين يصير المتبقي " + fmt(S.setTime - S.fc) + ". هذا تقريبًا الوقت لين بداية الكراك الثاني.", count:null, actions:[]};
+  }
+  if (S.phase === "cooling" && !S.doorOpened && (Date.now() - S.coolAt) / 1000 >= 90) return {k:"door", info:true, title:"افتح الباب", text:"الطقطقة غالبًا وقفت. افتح الباب والتبريد شغال عشان يبرد أسرع، ولا تطفي المحمصة قبل ما يخلص التبريد.", count:null, actions:[["فتحت الباب", openDoor]]};
+  return null;
+}
+function renderLive(){
+  const e = elapsed(), roasting = S.phase === "roasting";
+  const rem = roasting ? S.setTime - e : (S.phase === "setup" ? S.setTime : S.drop);
+  $("#remain").textContent = roasting ? fmtUp(rem) : fmt(rem);
+  $("#elapsed").textContent = fmt(S.phase === "setup" ? 0 : e);
+  const low = roasting && rem <= 59;
+  $("#vfd").classList.toggle("blink", low); $("#minuteHint").hidden = !low;
+  const pct = x => Math.max(0, Math.min(100, x / S.setTime * 100));
+  $("#fill").style.width = (S.phase === "setup" ? 0 : pct(e)) + "%";
+  $("#m75").style.insetInlineStart = "75%";
+  const mfc = $("#mFC"), msc = $("#mSC");
+  mfc.hidden = S.fc == null; if (S.fc != null) mfc.style.insetInlineStart = pct(S.fc) + "%";
+  msc.hidden = S.sc == null; if (S.sc != null) msc.style.insetInlineStart = pct(S.sc) + "%";
+  if (S.phase === "cooling") $("#coolT").textContent = fmt((Date.now() - S.coolAt) / 1000);
+  const a = currentAlert(), box = $("#alert");
+  if (!a) { box.hidden = true; lastAlertSig = ""; return; }
+  const sig = a.k + "|" + a.text;
+  if (sig !== lastAlertSig) {
+    lastAlertSig = sig; box.hidden = false; box.classList.toggle("info", !!a.info);
+    $("#alertTitle").textContent = a.title; $("#alertText").textContent = a.text;
+    const acts = $("#alertActions"); acts.replaceChildren();
+    for (const [label, fn] of a.actions) { const b = document.createElement("button"); b.type = "button"; b.textContent = label; b.addEventListener("click", fn); acts.append(b); }
+  }
+  $("#alertCount").textContent = a.count != null ? String(a.count) : "";
+}
+function tick(){
+  if (S.phase === "roasting") {
+    const e = elapsed();
+    if (S.setTime - e <= 0) { doCool(true); return; }
+    if (!S.checkDone && !S.checkAlerted && e >= 0.75 * S.setTime) { S.checkAlerted = true; persist(); beep(3); say("اضغط START على المحمصة الحين."); }
+  } else if (S.phase === "cooling" && !S.coolNotified && (Date.now() - S.coolAt) / 1000 >= 90) {
+    S.coolNotified = true; persist(); beep(1); say("افتح باب المحمصة والتبريد شغال.");
+  }
+  renderLive();
+}
+
+/* ---------- roast log (db) ---------- */
+let roastsCol = null, logDocs = [], canWrite = true;
+function dbErr(e){ const c = e && e.code; if (c === "not_granted" || c === "revoked") return "ما عندك صلاحية تكتب في السجل."; if (c === "quota_exceeded" || c === "resource_exhausted") return "السجل امتلأ. احذف تحميصات قديمة."; if (c === "unavailable") return "ما قدرت أوصل للسجل. جرّب بعد شوي."; return "ما انحفظت. جرّب مرة ثانية."; }
+function record(){
+  const r = stats();
+  return {v:1, bean:(S.bean || "").slice(0, 120), weight:S.weight, profile:S.profile, setInitial:S.initialSet, startedAt:new Date(S.startedAt).toISOString(),
+    total:r.total, fc:r.fc, sc:S.sc, dev:r.dev, dtr:r.dtr, greenG:parseFloat(S.greenG) || null, roastedG:parseFloat(S.roastedG) || null, loss:r.loss,
+    level:S.level || null, notes:(S.notes || "").slice(0, 1000), events:S.events.slice(-80), savedAt:new Date().toISOString()};
+}
+async function saveRoast(){
+  const msg = $("#saveMsg");
+  if (!roastsCol) { msg.textContent = "السجل يشتغل لما تفتح الصفحة داخل Claude."; return; }
+  if (!S.startedAt) return;
+  const id = S.savedId || ("r" + S.startedAt);
+  $("#saveBtn").disabled = true; msg.textContent = "أحفظ…";
+  try { await roastsCol.doc(id).set(record()); S.savedId = id; persist(); msg.textContent = "انحفظت في السجل."; }
+  catch (e) { msg.textContent = dbErr(e); }
+  finally { $("#saveBtn").disabled = false; }
+}
+function el(tag, cls, text){ const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
+function renderLog(note){
+  const box = $("#log"); box.replaceChildren();
+  if (note) box.append(el("p", "empty", note));
+  if (!logDocs.length) { if (!note) box.append(el("p", "empty", "ما فيه تحميصات محفوظة للحين. بعد COOL اكتب وزن البن بعد التحميص واضغط «احفظ في السجل».")); return; }
+  for (const r of logDocs) {
+    const card = el("article", "lr"), head = el("div", "lr-head");
+    head.append(el("h3", null, r.bean || "بن بدون اسم"));
+    let when = ""; try { when = new Date(r.startedAt).toLocaleString("ar", {dateStyle:"medium", timeStyle:"short"}); } catch (e) {}
+    head.append(el("span", "when", when)); card.append(head);
+    const tags = el("div", "tags");
+    const lv = LEVELS[r.level];
+    for (const t of [r.weight + "g · " + r.profile, "المدة " + fmt(r.total), r.fc != null ? "1C " + fmt(r.fc) : null, r.dtr != null ? "تطوير " + r.dtr + "%" : null, r.loss != null ? "فقد " + r.loss + "%" : null, lv ? lv[0] : null]) if (t) tags.append(el("span", null, t));
+    card.append(tags);
+    if (r.notes) card.append(el("p", null, r.notes));
+    const links = el("div", "links");
+    if (lv) {
+      for (const [style, label] of [["iced", "وصفة xBloom مثلّجة"], ["hot", "وصفة xBloom حارّة"]]) { const a = el("a", null, label); a.href = RECIPES + "#" + style + "-" + lv[1] + "-20"; a.target = "_blank"; a.rel = "noopener"; links.append(a); }
+    }
+    if (canWrite && roastsCol) {
+      const del = el("button", "linkbtn", "حذف"); del.type = "button";
+      del.addEventListener("click", () => {
+        del.hidden = true;
+        const sure = el("button", "linkbtn", "تأكيد الحذف النهائي"); sure.type = "button";
+        const no = el("button", "linkbtn", "لا"); no.type = "button";
+        no.addEventListener("click", () => { sure.remove(); no.remove(); del.hidden = false; });
+        sure.addEventListener("click", async () => { sure.disabled = true; try { await roastsCol.doc(r.id).delete(); } catch (e) { sure.textContent = dbErr(e); } });
+        links.append(sure, no);
+      });
+      links.append(del);
+    }
+    if (links.childNodes.length) card.append(links);
+    box.append(card);
+  }
+}
+async function initDb(){
+  const db = await use("db");
+  if (!db) { renderLog("السجل يشتغل لما تفتح الصفحة داخل Claude وأنت مسجّل دخول."); return; }
+  const user = await use("user");
+  if (user && user.can) { try { const c = await user.can("data.write"); if (c === false) canWrite = false; } catch (e) {} }
+  try { roastsCol = db.collection("roasts"); } catch (e) { renderLog("ما قدرت أفتح السجل."); return; }
+  let timer = setTimeout(() => renderLog("السجل ما وصل للحين. إذا ما ظهر بعد شوي، تأكد من الاتصال."), 10000);
+  roastsCol.orderBy("startedAt", "desc").limit(50).onSnapshot(snap => {
+    if (!snap.metadata.fromCache && timer) { clearTimeout(timer); timer = null; }
+    logDocs = snap.docs.map(d => Object.assign({id:d.id}, d.data()));
+    renderLog();
+  }, err => { if (timer) { clearTimeout(timer); timer = null; } renderLog(dbErr(err)); });
+}
+
+/* ---------- agent (sample + page tools) ---------- */
+const RULES = [
+  "أنت «وكيل التحميص» داخل صفحة «مساعد تحميص Behmor». تساعد صاحب الصفحة يحمّص على محمصة Behmor 1600 Plus (أزرار الوزن عنده بالجرام: 100 و200 و400، و400 يقابل برنامج الباوند في الكتيّب)، ويحضّر قهوته على xBloom Studio.",
+  "الأسلوب: عربي خليجي، نص عادي بدون Markdown. وقت التحميص جملة أو جملتين بس، والخطوة الجاية أول شي. بدون مقدمات ولا مجاملات.",
+  "حقائق من كتيّب Behmor 1600 Plus:",
+  "- العداد على الشاشة ينزل ويعرض الوقت المتبقي. عند 00:00 تدخل التبريد تلقائيًا. آخر 59 ثانية الشاشة تومض.",
+  "- الزر + يزيد 15 ثانية والزر − ينقص 10 ثواني، قبل البداية أو أثناء التحميص، لحد أقصى حسب البروفايل.",
+  "- أوقات البداية/الحد الأقصى لكل بروفايل (100g · 200g · 400g): P1 8:30/10:00 · 12:00/13:30 · 18:00/20:30؛ P2 9:30/10:30 · 13:00/14:30 · 20:00/22:30؛ P3 10:00/11:00 · 14:00/15:30 · 21:30/23:30؛ P4 10:20/11:30 · 14:40/16:30 · 22:40/24:30؛ P5 10:45/12:30 · 15:30/17:30 · 23:30/25:30.",
+  "- P1 أعلى حرارة وأسرع تحميص، وP5 أهدأ وأبطأ. P1 وP2 لأمريكا الوسطى وكولومبيا وبيرو. P3 للبرازيلي والأفريقي وجنوب شرق آسيا. P4 وP5 للبن الجزري المنخفض مثل Kona (P4 لين بداية الكراك الثاني، وP5 قبله).",
+  "- عند 75% من الوقت المضبوط الشاشة تومض un:30 وعنده 30 ثانية يضغط START، وإلا تدخل التبريد وتعرض err7.",
+  "- أول ما يبدأ الكراك الأول: الزر C في البرنامج الأحدث يضبط المتبقي حسب الوزن (1:30 لـ100g، و2:10 لـ200g، و3:10 لـ400g)، وهذا تقريبًا الوقت من بداية الكراك الأول لبداية الكراك الثاني. بدون C يعدّل بـ + و−.",
+  "- الوضع اليدوي بعد START: P1 إلى P5 = قوة 0% و25% و50% و75% و100%. D يغيّر سرعة الأسطوانة. زر 400 يرجّع للتلقائي. A يعرض حرارة العادم وB حرارة جدار الغرفة، وما وحدة منهم حرارة البن.",
+  "- لا يتجاوز 10 ثواني داخل الكراك الثاني. دخان كثيف أو أزرق يعني COOL فورًا. للتحميص الغامق الكتيّب ينصح بنص باوند أو أقل.",
+  "- إذا اشتعل البن: لا يفتح الباب، يطفي المحمصة ويفصل الكهرباء.",
+  "- لا يطفي المحمصة أثناء التحميص أو قبل ما يكمل التبريد. بعد ما توقف الطقطقة في التبريد (حوالي 1:30) يقدر يفتح الباب والتبريد شغال. ساعة بين كل تحميصة. المحمصة ما تنترك بدون مراقبة.",
+  "xBloom: صفحة الوصفات السريعة " + RECIPES + " وكل وصفة لها رابط بالشكل " + RECIPES + "#iced-light-20 (iced أو hot، ثم light أو medium أو dark، ثم الكمية من 12 إلى 25 جرام). City وCity+ تقابل light، وFull City تقابل medium، وFull City+ والغامق تقابل dark.",
+  "حالة الصفحة توصلك مع كل رسالة. لا تخترع أرقام ما هي عندك، وإذا استخدمت قاعدة عامة من خارج الكتيّب قل إنها قاعدة عامة. إذا ناقصك شي اسأل سؤال واحد.",
+  "الأدوات: استخدم mark_event بس إذا قال المستخدم صراحة إن الحدث صار الحين (مثل «بدأ الكراك الأول» أو «ضغطت COOL»). استخدم adjust_time بس إذا قال إنه غيّر الوقت على المحمصة أو قال كم المتبقي على شاشتها. استخدم add_note للملاحظات اللي يبي يسجلها."
+].join("\n");
+
+function timerState(){ const e = elapsed(); return {phase:S.phase, elapsed:fmt(e), remaining:S.phase === "roasting" ? fmtUp(S.setTime - e) : null, set_time:fmt(S.setTime), first_crack:S.fc != null ? fmt(S.fc) : null, second_crack:S.sc != null ? fmt(S.sc) : null}; }
+function summary(){
+  const e = elapsed();
+  return Object.assign(timerState(), {
+    bean:S.bean || null, weight_button_g:S.weight, profile:S.profile, manual_power_pct:S.manual, max_time:fmt(maxT()),
+    start_check_at:fmt(0.75 * S.setTime), start_check_done:S.checkDone, drop:S.drop != null ? fmt(S.drop) : null,
+    cooling_for:S.phase === "cooling" ? fmt((Date.now() - S.coolAt) / 1000) : null,
+    after_roast:(S.phase === "cooling" || S.phase === "done") ? Object.assign(stats(), {level:S.level || null}) : null,
+    events:S.events.slice(-15).map(x => fmt(x.t) + " " + (EV[x.type] || x.type) + (x.v ? " " + x.v : "")),
+    recent_roasts:logDocs.slice(0, 6).map(r => ({date:String(r.startedAt || "").slice(0, 10), bean:r.bean || null, weight:r.weight, profile:r.profile, total:fmt(r.total), first_crack:r.fc != null ? fmt(r.fc) : null, dtr_pct:r.dtr ?? null, loss_pct:r.loss ?? null, level:r.level || null, notes:String(r.notes || "").slice(0, 140)}))
+  });
+}
+const TOOLS = [
+  {name:"mark_event", description:"يسجّل حدث في التحميصة الشغالة ويحدّث المؤقت: first_crack (يضبط المتبقي حسب الوزن مثل زر C)، أو second_crack، أو cool (ينهي التحميص ويبدأ التبريد). استخدمه بس إذا قال المستخدم صراحة إن الحدث صار الحين. يرجّع حالة المؤقت.",
+   inputSchema:{type:"object", properties:{event:{type:"string", enum:["first_crack", "second_crack", "cool"]}}, required:["event"]},
+   execute(input){ const ev = String(input && input.event); if (S.phase !== "roasting") throw new Error("ما فيه تحميص شغال الحين"); let ok; if (ev === "first_crack") ok = markFC(); else if (ev === "second_crack") ok = markSC(); else if (ev === "cool") ok = doCool(false); else throw new Error("حدث غير معروف: " + ev); if (!ok) throw new Error("الحدث متسجل من قبل"); return timerState(); }},
+  {name:"adjust_time", description:"يعدّل الوقت المضبوط في الصفحة عشان يطابق المحمصة. أرسل seconds (موجب يزيد وسالب ينقص) لما يقول إنه ضغط + أو −، أو remaining بصيغة mm:ss لما يقول كم المتبقي على شاشة المحمصة. يرجّع حالة المؤقت.",
+   inputSchema:{type:"object", properties:{seconds:{type:"number"}, remaining:{type:"string"}}},
+   execute(input){ if (S.phase !== "roasting" && S.phase !== "setup") throw new Error("التحميص خلص"); if (input && input.remaining != null) { const r = parseMMSS(String(input.remaining)); if (r == null) throw new Error("الصيغة لازم تكون mm:ss"); applySync(r); } else { const d = Math.round(Number(input && input.seconds)); if (!isFinite(d) || d === 0) throw new Error("seconds لازم يكون رقم غير صفر"); applyAdjust(d); } return timerState(); }},
+  {name:"add_note", description:"يضيف ملاحظة قصيرة لمجريات التحميصة الحالية (الريحة، الدخان، اللون). يرجّع ok.",
+   inputSchema:{type:"object", properties:{text:{type:"string"}}, required:["text"]},
+   execute(input){ const t = String((input && input.text) || "").trim().slice(0, 200); if (!t) throw new Error("الملاحظة فاضية"); log("note", t); persist(); renderTimeline(); return "ok"; }}
+];
+let sample = null, toolsOK = false, busy = false, ctl = null, dict = null;
+const turns = [];
+function addMsg(kind, text){ const d = el("div", "msg " + kind, text); $("#msgs").append(d); $("#msgs").scrollTop = $("#msgs").scrollHeight; return d; }
+function renderRich(node, text){
+  node.replaceChildren();
+  for (const p of String(text).split(/(https:\/\/[^\s<>"'()]+)/g)) {
+    if (/^https:\/\//.test(p)) { const a = el("a", null, p); a.href = p; a.target = "_blank"; a.rel = "noopener"; node.append(a); }
+    else if (p) node.append(document.createTextNode(p));
+  }
+}
+function setBusy(on){ busy = on; $("#sendBtn").disabled = on || !sample; $("#stopBtn").hidden = !on; document.querySelectorAll("#chips button").forEach(b => { b.disabled = on || !sample; }); }
+function agentOff(text){ sample = null; $("#agentState").textContent = text; $("#agentState").hidden = false; $("#askForm").hidden = true; $("#chips").hidden = true; }
+async function ask(raw){
+  const text = String(raw || "").trim();
+  if (!text || busy || !sample) return;
+  addMsg("user", text); turns.push({role:"user", content:text});
+  const bubble = addMsg("agent pending", "يفكر…");
+  setBusy(true); ctl = new AbortController();
+  const input = [{role:"user", content:RULES}, ...turns.slice(-13, -1), {role:"user", content:"حالة الصفحة الآن (JSON):\n" + JSON.stringify(summary()) + "\n\nرسالة المستخدم:\n" + text}];
+  const opts = {signal:ctl.signal, modelTier:S.phase === "roasting" ? "quick" : "default", onText:({text}) => { bubble.classList.remove("pending"); bubble.textContent = text; $("#msgs").scrollTop = $("#msgs").scrollHeight; }};
+  if (toolsOK) opts.tools = TOOLS; else opts.cache = false;
+  try {
+    const res = await sample(input, opts);
+    bubble.classList.remove("pending"); renderRich(bubble, res.text);
+    turns.push({role:"assistant", content:res.text});
+    if (res.truncated) addMsg("sys", "الرد انقطع قبل ما يكمل. اسأل عن جزء أصغر.");
+    say(res.text);
+  } catch (e) {
+    bubble.classList.remove("pending");
+    const code = e && e.code;
+    if (code === "cancelled") { if (e.text) renderRich(bubble, e.text); else bubble.remove(); }
+    else if (["not_granted", "sampling_disabled", "not_declared", "capability_disabled", "capability_removed"].includes(code)) { bubble.remove(); agentOff("الوكيل موقّف في هذا العرض."); }
+    else if (code === "tools_unavailable") { toolsOK = false; turns.pop(); bubble.textContent = "الأدوات مو متاحة هنا. أرسل رسالتك مرة ثانية وبيرد بدون ما يغيّر المؤقت."; }
+    else if (code === "refused") { turns.pop(); bubble.textContent = "ما قدر يرد على هذي الرسالة. جرّب تصيغها بشكل ثاني."; }
+    else if (code === "rate_limited") { bubble.textContent = (e.text ? e.text + "\n\n" : "") + "وصلت الحد المسموح. جرّب بعد شوي."; }
+    else if (code === "session_expired") { bubble.textContent = "لازم تسجّل دخولك في Claude مرة ثانية."; }
+    else { bubble.textContent = (e.text ? e.text + "\n\n" : "") + "انقطع الرد. أرسل رسالتك مرة ثانية."; }
+  } finally { ctl = null; setBusy(false); }
+}
+async function initAgent(){
+  const s = await use("sample");
+  if (!s) { agentOff("الوكيل يشتغل لما تفتح الصفحة داخل Claude."); return; }
+  sample = s;
+  try { const lim = await s.limits(); toolsOK = !!(lim && lim.tools); } catch (e) { toolsOK = false; }
+  $("#agentState").hidden = true; $("#askIn").disabled = false; setBusy(false);
+}
+async function initVoice(){
+  const t = await use("tts");
+  if (t) { tts = t; $("#speakWrap").hidden = false; }
+  const d = await use("dictation");
+  if (!d) return;
+  dict = d; $("#micBtn").hidden = false;
+  d.onFinal(({text}) => { const box = $("#askIn"); box.value = box.value ? box.value + text : text.trimStart(); });
+  d.onPartial(({text}) => { $("#partial").textContent = text; });
+  d.onState(({state, reason}) => {
+    const on = state !== "idle";
+    $("#micBtn").setAttribute("aria-pressed", String(on)); $("#micBtn").textContent = on ? "وقّف" : "تكلّم";
+    if (!on) {
+      $("#partial").textContent = "";
+      if (reason === "not_granted") $("#micBtn").hidden = true;
+      if ((reason === "stopped" || reason === "viewer_stopped") && $("#askIn").value.trim() && sample && !busy) { const v = $("#askIn").value; $("#askIn").value = ""; ask(v); }
+    }
+  });
+}
+
+/* ---------- wiring ---------- */
+document.querySelectorAll("#wBtns .rb").forEach(b => b.addEventListener("click", () => setWeight(+b.dataset.w)));
+document.querySelectorAll("#pBtns .rb").forEach(b => b.addEventListener("click", () => setProfile(b.dataset.p)));
+$("#plus").addEventListener("click", () => applyAdjust(15));
+$("#minus").addEventListener("click", () => applyAdjust(-10));
+$("#syncBtn").addEventListener("click", () => { const r = parseMMSS($("#syncIn").value); if (r == null) { timeMsg("اكتب الوقت بالشكل 12:44"); return; } if (applySync(r)) $("#syncIn").value = ""; });
+$("#startBtn").addEventListener("click", startRoast);
+$("#fcBtn").addEventListener("click", markFC);
+$("#scBtn").addEventListener("click", markSC);
+$("#coolBtn").addEventListener("click", () => doCool(false));
+$("#coolDone").addEventListener("click", coolDone);
+$("#tA").addEventListener("click", () => logTemp("A"));
+$("#tB").addEventListener("click", () => logTemp("B"));
+$("#bean").addEventListener("input", e => { S.bean = e.target.value; persist(); });
+$("#greenG").addEventListener("input", e => { S.greenG = e.target.value; persist(); renderStats(); });
+$("#roastedG").addEventListener("input", e => { S.roastedG = e.target.value; persist(); renderStats(); });
+$("#level").addEventListener("change", e => { S.level = e.target.value; persist(); });
+$("#notes").addEventListener("input", e => { S.notes = e.target.value; persist(); });
+$("#saveBtn").addEventListener("click", saveRoast);
+$("#newBtn").addEventListener("click", () => { if (S.savedId) newRoast(); else $("#newConfirm").hidden = false; });
+$("#newYes").addEventListener("click", newRoast);
+$("#newNo").addEventListener("click", () => { $("#newConfirm").hidden = true; });
+$("#askForm").addEventListener("submit", e => { e.preventDefault(); const v = $("#askIn").value; $("#askIn").value = ""; ask(v); });
+$("#askIn").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("#askForm").requestSubmit(); } });
+$("#stopBtn").addEventListener("click", () => { if (ctl) ctl.abort(); });
+document.querySelectorAll("#chips button").forEach(b => b.addEventListener("click", () => ask(b.textContent)));
+$("#micBtn").addEventListener("click", () => { if (!dict) return; if (dict.active()) dict.stop().catch(() => {}); else dict.start().catch(() => {}); });
+$("#speakTog").addEventListener("change", e => { try { localStorage.setItem(SPEAK_KEY, e.target.checked ? "1" : "0"); } catch (x) {} if (!e.target.checked && tts) tts.stop().catch(() => {}); });
+
+function loadLocal(){ try { const s = JSON.parse(localStorage.getItem(KEY) || "null"); if (s && typeof s === "object" && TIMES[s.weight] && TIMES[s.weight][s.profile] && PHASE[s.phase]) return Object.assign(fresh(), s); } catch (e) {} return null; }
+function boot(data){
+  const hot = data && data.S;
+  S = (hot && TIMES[hot.weight] && TIMES[hot.weight][hot.profile] && PHASE[hot.phase]) ? Object.assign(fresh(), hot) : (loadLocal() || fresh());
+  try { const sp = localStorage.getItem(SPEAK_KEY); if (sp === "0") $("#speakTog").checked = false; } catch (e) {}
+  fillInputs(); renderAll();
+  if (S.phase === "roasting" || S.phase === "cooling") keepAwake();
+  setInterval(tick, 250);
+  initAgent(); initVoice(); initDb();
+}
+try { if (window.claude && window.claude.hot && window.claude.hot.snapshot) window.claude.hot.snapshot(() => ({S})); } catch (e) {}
+if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(boot);
+else boot((window.claude && window.claude.hot && window.claude.hot.data) || {});
+</script>
