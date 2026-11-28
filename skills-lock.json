@@ -22,6 +22,13 @@
       "skillPath": "skills/automate-me/SKILL.md",
       "computedHash": "33a2a677ebb87109b1c4c34d5b42b35002df78f6be2f07ccc650b5d0fb2efded"
     },
+    "banner-design": {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "commit": "11ca2b3bdd555649f278ee348c32a9302b24dcf1",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/banner-design/SKILL.md",
+      "computedHash": "4b22f6f48afc6fcd72e6f3ae106a4dca11b33b88221efded1f5c62d8f9afb50d"
+    },
     "benchmark-checklist": {
       "source": "backnotprop/pstack",
       "commit": "c3464c11c60b1352d5e8f5f0428a3a6943837568",
@@ -35,6 +42,20 @@
       "sourceType": "github",
       "skillPath": "skills/blast-radius/SKILL.md",
       "computedHash": "f9ec7353939c4449f2edb1cd195049f477b9ba6c0a869de75c7b440e27295f01"
+    },
+    "brainstorming": {
+      "source": "obra/superpowers",
+      "commit": "22f0b463e7a5e579904dd6211a520321035526f7",
+      "sourceType": "github",
+      "skillPath": "skills/brainstorming/SKILL.md",
+      "computedHash": "a7424777b7f81e3eb9b4556d29fe233553736d8255780d3e1feea190fef61fef"
+    },
+    "brand": {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "commit": "11ca2b3bdd555649f278ee348c32a9302b24dcf1",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/brand/SKILL.md",
+      "computedHash": "b721d41906980d52b9563fe81ecc0fb39785ac12151b936a8080e11c4d4c7b8f"
     },
     "bro": {
       "source": "backnotprop/pstack",
@@ -162,6 +183,41 @@
       "skillPath": "skills/create-verification-skill/SKILL.md",
       "computedHash": "da47973dc3b1a1bae6f66d4933e6a233a06b832b963afb8e2cf74465ee09b673"
     },
+    "design": {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "commit": "11ca2b3bdd555649f278ee348c32a9302b24dcf1",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/design/SKILL.md",
+      "computedHash": "9ae95b3297d9fb2ab5149e46d4819183072f9c977fa9db3df1d87686c57850c3"
+    },
+    "design-system": {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "commit": "11ca2b3bdd555649f278ee348c32a9302b24dcf1",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/design-system/SKILL.md",
+      "computedHash": "9d5c24edd9030632a5fbe859c2b74758433e8788111bd77a25539ee018062c65"
+    },
+    "diagnosing-superpowers": {
+      "source": "obra/superpowers",
+      "commit": "22f0b463e7a5e579904dd6211a520321035526f7",
+      "sourceType": "github",
+      "skillPath": "skills/diagnosing-superpowers/SKILL.md",
+      "computedHash": "44d0295c3d59d6418f80c96e40d8e7b7ece99513ab6e63e5d04b1cf87cc5bbab"
+    },
+    "dispatching-parallel-agents": {
+      "source": "obra/superpowers",
+      "commit": "22f0b463e7a5e579904dd6211a520321035526f7",
+      "sourceType": "github",
+      "skillPath": "skills/dispatching-parallel-agents/SKILL.md",
+      "computedHash": "d799e464fdfb0edc80b3b7ad7cce03e64ee07fc5db231c988688a81438503659"
+    },
+    "executing-plans": {
+      "source": "obra/superpowers",
+      "commit": "22f0b463e7a5e579904dd6211a520321035526f7",
+      "sourceType": "github",
+      "skillPath": "skills/executing-plans/SKILL.md",
+      "computedHash": "58b364f6e3f64602c7cfd0b34ceaad9de95d41fe7e4b46b274843ba19fc01ccc"
+    },
     "figure-it-out": {
       "source": "backnotprop/pstack",
       "commit": "c3464c11c60b1352d5e8f5f0428a3a6943837568",
@@ -176,12 +232,54 @@
       "skillPath": "skills/find-skills/SKILL.md",
       "computedHash": "7bc223e2aafbdbf6e50ea243ba6ef67fe432bb069ab439fea0390795dac0bf7f"
     },
+    "finishing-a-development-branch": {
+      "source": "obra/superpowers",
+      "commit": "22f0b463e7a5e579904dd6211a520321035526f7",
+      "sourceType": "github",
+      "skillPath": "skills/finishing-a-development-branch/SKILL.md",
+      "computedHash": "7e24d821d45b8f10773edd9f1a4be2fac90eedae4f8fc8e70e34e27e44d3f3c0"
+    },
     "how": {
       "source": "backnotprop/pstack",
       "commit": "c3464c11c60b1352d5e8f5f0428a3a6943837568",
       "sourceType": "github",
       "skillPath": "skills/how/SKILL.md",
       "computedHash": "397faf7706279220499dd649a110e0055f1665ecab63528f321d231632af17de"
+    },
+    "humanizer": {
+      "source": "blader/humanizer",
+      "commit": "a32f24407364c74c812b43c15926d638bee1e072",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "6da5d71e32eb66770b4c1ebe38b7e5c271bfca6290c9248aeb8449a84dbfe914"
+    },
+    "hyperframes": {
+      "source": "heygen-com/hyperframes",
+      "commit": "2cdc8dc71c17fb7f1ea207ad79e14bf51dfc3df4",
+      "sourceType": "github",
+      "skillPath": "skills/hyperframes/SKILL.md",
+      "computedHash": "c1306398a0593a57fa56711d6dd809b3d0198055551c68201cccb593d6916c2d"
+    },
+    "hyperframes-cli": {
+      "source": "heygen-com/hyperframes",
+      "commit": "2cdc8dc71c17fb7f1ea207ad79e14bf51dfc3df4",
+      "sourceType": "github",
+      "skillPath": "skills/hyperframes-cli/SKILL.md",
+      "computedHash": "0ea9db9323924084f7e2b24e9eb2755891ba7a74c0b706c2d3ea0e54b7b23eea"
+    },
+    "hyperframes-registry": {
+      "source": "heygen-com/hyperframes",
+      "commit": "2cdc8dc71c17fb7f1ea207ad79e14bf51dfc3df4",
+      "sourceType": "github",
+      "skillPath": "skills/hyperframes-registry/SKILL.md",
+      "computedHash": "6867a66011b2cda40600cc9bff07e89197b756e6aa77861d884285ba7a869361"
+    },
+    "impeccable": {
+      "source": "pbakaus/impeccable",
+      "commit": "2fc5e1459efbbf06d92c7306517c286bf12490cf",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/impeccable/SKILL.md",
+      "computedHash": "ba5494cb853df34dc3284176083f954829717c42474107d5d01934b2f43930b4"
     },
     "in-your-own-words": {
       "source": "backnotprop/pstack",
@@ -203,6 +301,13 @@
       "sourceType": "github",
       "skillPath": "skills/investigate-first/SKILL.md",
       "computedHash": "129b1eba6d106c1d095baefd30578c6303b93119fcd21bd5583ebd34592f3acc"
+    },
+    "karpathy-guidelines": {
+      "source": "multica-ai/andrej-karpathy-skills",
+      "commit": "2c606141936f1eeef17fa3043a72095b4765b9c2",
+      "sourceType": "github",
+      "skillPath": "skills/karpathy-guidelines/SKILL.md",
+      "computedHash": "e64131803b0a34b8c39afc11338a74f8305cf8f69f750620bdf6cb38f6865c52"
     },
     "ketchup": {
       "source": "backnotprop/pstack",
@@ -245,6 +350,13 @@
       "sourceType": "github",
       "skillPath": "skills/make-bot-ui/SKILL.md",
       "computedHash": "8f32748333369065a97d536e463ffbf40c6c908c32ad3ac342f8337fdef45914"
+    },
+    "media-use": {
+      "source": "heygen-com/hyperframes",
+      "commit": "2cdc8dc71c17fb7f1ea207ad79e14bf51dfc3df4",
+      "sourceType": "github",
+      "skillPath": "skills/media-use/SKILL.md",
+      "computedHash": "792b13481ada03ec83a2be66f6c616ce46ad3fb82cead048019e98350efc8eb0"
     },
     "megacave": {
       "source": "JuliusBrussee/caveman",
@@ -456,12 +568,33 @@
       "skillPath": "skills/recall/SKILL.md",
       "computedHash": "b09636811fad8601b2c3caf6640a4c53dfa6d1cacf1475264bf84f204484367b"
     },
+    "receiving-code-review": {
+      "source": "obra/superpowers",
+      "commit": "22f0b463e7a5e579904dd6211a520321035526f7",
+      "sourceType": "github",
+      "skillPath": "skills/receiving-code-review/SKILL.md",
+      "computedHash": "528d336858d6f7d22cfcb887a249409ce682cb7d37a939cb15a82f2576a35876"
+    },
     "reflect": {
       "source": "backnotprop/pstack",
       "commit": "c3464c11c60b1352d5e8f5f0428a3a6943837568",
       "sourceType": "github",
       "skillPath": "skills/reflect/SKILL.md",
       "computedHash": "800a0326be388647cde2541aca529ab3c1fe0dff968d0467684a26ba79ce5693"
+    },
+    "requesting-code-review": {
+      "source": "obra/superpowers",
+      "commit": "22f0b463e7a5e579904dd6211a520321035526f7",
+      "sourceType": "github",
+      "skillPath": "skills/requesting-code-review/SKILL.md",
+      "computedHash": "32bcc25e8c3315d0150f646ee0067c9d4bfbc7719c34012db9c202e17cce8a14"
+    },
+    "reverse-any-video": {
+      "source": "heygen-com/hyperframes",
+      "commit": "2cdc8dc71c17fb7f1ea207ad79e14bf51dfc3df4",
+      "sourceType": "github",
+      "skillPath": "skills/reverse-any-video/SKILL.md",
+      "computedHash": "221f106c2b350432e566d8469f91c914978a868becd7fffe72f312ae105d1297"
     },
     "safe-refactor": {
       "source": "JuliusBrussee/caveman",
@@ -491,12 +624,33 @@
       "skillPath": "skills/show-me-your-work/SKILL.md",
       "computedHash": "ec213956e5cb2f5f6f5d814c943d83e4fd8d865417d44acfba9355a2e2e1a192"
     },
+    "slides": {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "commit": "11ca2b3bdd555649f278ee348c32a9302b24dcf1",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/slides/SKILL.md",
+      "computedHash": "059825b15a508a5f1533ab646f968ffcbcdbb8eadd76c2d122151bfbcf19d287"
+    },
     "statechart": {
       "source": "backnotprop/pstack",
       "commit": "c3464c11c60b1352d5e8f5f0428a3a6943837568",
       "sourceType": "github",
       "skillPath": "skills/statechart/SKILL.md",
       "computedHash": "d690e6c30285a4ac01e3660c7b3d973593ab82ccbfd04b8307ffec66d9b600af"
+    },
+    "style-sampling": {
+      "source": "heygen-com/hyperframes",
+      "commit": "2cdc8dc71c17fb7f1ea207ad79e14bf51dfc3df4",
+      "sourceType": "github",
+      "skillPath": "skills/style-sampling/SKILL.md",
+      "computedHash": "433d429c44c3e43028f804b4f6a933994d1a7f2c891faef26ec04d42b26cefa2"
+    },
+    "subagent-driven-development": {
+      "source": "obra/superpowers",
+      "commit": "22f0b463e7a5e579904dd6211a520321035526f7",
+      "sourceType": "github",
+      "skillPath": "skills/subagent-driven-development/SKILL.md",
+      "computedHash": "da0ad5e635b6ff70c2b6dbf25e51ae6ca1cad6beebfc61a791195675468c492e"
     },
     "surgical-patch": {
       "source": "JuliusBrussee/caveman",
@@ -511,6 +665,13 @@
       "sourceType": "github",
       "skillPath": "skills/swarm/SKILL.md",
       "computedHash": "95fef6fb4f6b3300076fd6d0b9807895694ef7039c033368280997309e9d4305"
+    },
+    "systematic-debugging": {
+      "source": "obra/superpowers",
+      "commit": "22f0b463e7a5e579904dd6211a520321035526f7",
+      "sourceType": "github",
+      "skillPath": "skills/systematic-debugging/SKILL.md",
+      "computedHash": "79ff0583175346e39431b0dc713b223edd1bd7a7ea2b6c8b78b2fb9a3fed6782"
     },
     "tdd": {
       "source": "backnotprop/pstack",
@@ -533,12 +694,33 @@
       "skillPath": "skills/technical-writing/SKILL.md",
       "computedHash": "a073968ea82cfed3e31be2403ff824783d4a342b2fac551532df0d6c76f51af1"
     },
+    "test-driven-development": {
+      "source": "obra/superpowers",
+      "commit": "22f0b463e7a5e579904dd6211a520321035526f7",
+      "sourceType": "github",
+      "skillPath": "skills/test-driven-development/SKILL.md",
+      "computedHash": "2782702b2cf69ace085ed30d067b6f8bfd2d777ad51770fc5bdae9cb5c1b5c04"
+    },
     "typescript-best-practices": {
       "source": "backnotprop/pstack",
       "commit": "c3464c11c60b1352d5e8f5f0428a3a6943837568",
       "sourceType": "github",
       "skillPath": "skills/typescript-best-practices/SKILL.md",
       "computedHash": "fb35e49d1b6a48fa42d81fff0e4e9834b8f98e0ebcf188203680f1f4265df690"
+    },
+    "ui-styling": {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "commit": "11ca2b3bdd555649f278ee348c32a9302b24dcf1",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/ui-styling/SKILL.md",
+      "computedHash": "3f83a2e04d71198be3095a47555d35822e43b6e2015e95b5a4cd2bd8177ae2e0"
+    },
+    "ui-ux-pro-max": {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "commit": "11ca2b3bdd555649f278ee348c32a9302b24dcf1",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/ui-ux-pro-max/SKILL.md",
+      "computedHash": "e960cc1c18fed7c3a88e4c2129157e35939e5e039b44b1e8d6b333fafa7653bb"
     },
     "ultracave": {
       "source": "JuliusBrussee/caveman",
@@ -554,6 +736,27 @@
       "skillPath": "skills/unslop/SKILL.md",
       "computedHash": "4bbcb6719a8f0f6f7fb46752e1c360791d7758a837708e300a06fc7d6907938c"
     },
+    "using-git-worktrees": {
+      "source": "obra/superpowers",
+      "commit": "22f0b463e7a5e579904dd6211a520321035526f7",
+      "sourceType": "github",
+      "skillPath": "skills/using-git-worktrees/SKILL.md",
+      "computedHash": "b69324cb5e5ba5b846fc2ae2811616008dc6f19858245100e472713190d4c9e4"
+    },
+    "using-superpowers": {
+      "source": "obra/superpowers",
+      "commit": "22f0b463e7a5e579904dd6211a520321035526f7",
+      "sourceType": "github",
+      "skillPath": "skills/using-superpowers/SKILL.md",
+      "computedHash": "6a9104fac7e16c3cec2bc118943aefd331cac35b4cfabd427cea4dc16337c6a5"
+    },
+    "verification-before-completion": {
+      "source": "obra/superpowers",
+      "commit": "22f0b463e7a5e579904dd6211a520321035526f7",
+      "sourceType": "github",
+      "skillPath": "skills/verification-before-completion/SKILL.md",
+      "computedHash": "09b0e3a4689c1c38a3b8fc6ef57a1d4165aa33c0013d546dbde9dd348941a319"
+    },
     "verify-and-stop": {
       "source": "JuliusBrussee/caveman",
       "commit": "b89752f6bca5a26bfde8b019813554241800ca99",
@@ -567,6 +770,20 @@
       "sourceType": "github",
       "skillPath": "skills/why/SKILL.md",
       "computedHash": "2050d10fff1d0fa6e19c0a96552a641af6a24f012614955a6dcf3763bf54ac3c"
+    },
+    "writing-plans": {
+      "source": "obra/superpowers",
+      "commit": "22f0b463e7a5e579904dd6211a520321035526f7",
+      "sourceType": "github",
+      "skillPath": "skills/writing-plans/SKILL.md",
+      "computedHash": "ef082ddb5354d736059397133b3682e8a0c85c57906affe47c9da354cbb7c91e"
+    },
+    "writing-skills": {
+      "source": "obra/superpowers",
+      "commit": "22f0b463e7a5e579904dd6211a520321035526f7",
+      "sourceType": "github",
+      "skillPath": "skills/writing-skills/SKILL.md",
+      "computedHash": "50d87a4c2c6a9d60156ccfdbe844e0a11678968157e494a8a8c02377c273483a"
     },
     "xbloom-studio-recipe": {
       "source": "ryunana/xbloom-studio-recipe-skill",
