@@ -44,6 +44,7 @@
   uv tool install graphifyy && graphify install --project
   npx -y get-shit-done-cc@latest --claude --local --minimal
   ```
+- بيئة سحابية شخصية اسمها `ETOS & Hermes` فيها سكربت إعداد يشغّل أوامر إعادة التثبيت أعلاه مع بداية كل جلسة، ثم يرجّع `CLAUDE.md` و`skills-lock.json` لحالتهما. جُرّب في 2026-11-28: 72 ثانية، وكل الخطوات نجحت. شبكتها محدودة: سجلات الحزم، وGitHub وskills.sh للمثبّت، وTikTok وروابط مشاركة xBloom. بيئة Default مفتوحة بالكامل وما فيها السكربت. يتعدل السكربت من Settings ← Environments.
 - أمر `graphify install --project` يعيد كتابة قسم graphify في `CLAUDE.md`. بعد تشغيله تأكد إن سطر `@claude-preferences.md` باقي في أول الملف.
 - لا تُثبَّت مهارة جديدة بدون موافقة المستخدم.
 - مهارات Caveman Cloud (`caveman-setup` و`caveman-discover` و`caveman-manage`) تمرّر الطلبات عبر بوابة خارجية، ولا تُشغَّل إلا بطلب صريح.
