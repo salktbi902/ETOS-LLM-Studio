@@ -53,6 +53,8 @@ td.n{font-family:var(--mono)}
 .actions{display:flex;gap:8px;flex-wrap:wrap}
 button{font:600 .9rem var(--body);padding:9px 16px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer}
 button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+a.btn{display:inline-flex;align-items:center;font:600 .9rem var(--body);padding:9px 16px;border-radius:10px;border:1px solid var(--accent);color:var(--accent);background:var(--surface);text-decoration:none}
+a.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .toast{font-size:.85rem;color:var(--accent);min-height:1.2em}
 .saved{display:flex;flex-direction:column;gap:8px}
@@ -99,6 +101,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
     <div class="saved">
       <a href="#holy-cannoli"><span>هولي كانولي 🧊</span><small>Bones Coffee · متوسط منكّه</small></a>
       <a href="#super-fruit"><span>سوبرر فروت 🧊 v2</span><small>فاتح إلى متوسط · فاكهي</small></a>
+      <a href="#super-fruit-v1"><span>150🧊 سوبرر فروت 🥥🥭 (الأصلية)</span><small>من تطبيقك · فيها رابط xBloom</small></a>
     </div>
   </section>
 
@@ -131,6 +134,13 @@ const PRESETS = {
     dose:20, grind:56, rpm:100, ice:110, time:"2:20 – 2:50",
     pours:[[40,93,3.0,"حلزوني",35],[40,93,3.5,"حلزوني",10],[55,93,3.5,"حلزوني",8],[55,92,3.5,"دائري",0]],
     notes:["اهتزاز بعد الـ Bloom فقط.","حامضة: الطحن 56 ← 54. مرّة: 56 ← 58. باهتة: توقف الـ Bloom 35 ← 45 s."]
+  },
+  "super-fruit-v1": {
+    name:"150🧊 سوبرر فروت 🥥🥭", style:"iced", subtitle:"الوصفة الأصلية من تطبيق xBloom · قمع Other",
+    dose:20, grind:60, rpm:null, ice:150, time:null,
+    xb:"https://share-h5.xbloom.com/?id=NKGG5VC4v%2FwD3tRwNvbL2A%3D%3D",
+    pours:[[50,87,null,null,15],[40,86,null,null,15],[30,85,null,null,15],[20,89,null,null,15],[20,92,null,null,15]],
+    notes:["الثلج 150 g مأخوذ من اسم الوصفة، وصفحة المشاركة ما تذكره.","توقف الـ Bloom 15 s بس، وxBloom وThe Basic Barista ينصحون بـ 30 إلى 45 s.","الحرارة من 85° إلى 92°، أقل من 93° إلى 96° اللي تنصح فيها xBloom للمثلّج. نسخة v2 تصحح الاثنين.","التدفق والنمط وسرعة الطاحونة ما تظهر نصًا في صفحة المشاركة. تلقاها في التطبيق."]
   }
 };
 
@@ -173,9 +183,10 @@ function generate(style, roast, dose, flav){
 function render(r, key){
   const water = r.pours.reduce((a,p)=>a+p[0],0);
   const ratio = (water / r.dose).toFixed(1);
-  const total = ((water + (r.ice||0)) / r.dose).toFixed(0);
+  const total = +((water + (r.ice||0)) / r.dose).toFixed(1);
+  const dash = v => v == null ? "—" : v;
   const notes = r.dose > 18 ? [...r.notes, r.dose + " g فوق المدى الموصى به رسميًا (من 5 إلى 18 g). يشتغل في التطبيق، بس راقب القمع لا يفيض."] : r.notes;
-  const rows = r.pours.map((p,i)=>`<tr><td>${i===0?"Bloom":"صبة "+(i+1)}</td><td class="n">${p[0]} ml</td><td class="n">${p[1]}°</td><td class="n">${p[2].toFixed(1)}</td><td>${p[3]}</td><td class="n">${p[4]} s</td></tr>`).join("");
+  const rows = r.pours.map((p,i)=>`<tr><td>${i===0?"Bloom":"صبة "+(i+1)}</td><td class="n">${p[0]} ml</td><td class="n">${p[1]}°</td><td class="n">${p[2]==null?"—":p[2].toFixed(1)}</td><td>${dash(p[3])}</td><td class="n">${p[4]} s</td></tr>`).join("");
   $("#recipe").innerHTML = `
     <div class="card-head"><div><h2>${r.name}</h2><p class="sub">${r.subtitle}</p></div>
       <span class="tag ${r.style}">${r.style==="iced"?"مثلّجة":"حارّة"}</span></div>
@@ -184,17 +195,17 @@ function render(r, key){
       <div class="stat"><span>الماء</span><b>${water} ml</b></div>
       ${r.ice?`<div class="stat"><span>الثلج</span><b>${r.ice} g</b></div>`:""}
       <div class="stat"><span>الطحن</span><b>${r.grind}</b></div>
-      <div class="stat"><span>الطاحونة</span><b>${r.rpm} RPM</b></div>
+      <div class="stat"><span>الطاحونة</span><b>${r.rpm==null?"—":r.rpm+" RPM"}</b></div>
       <div class="stat"><span>النسبة</span><b>1:${ratio}${r.ice?" → 1:"+total:""}</b></div>
-      <div class="stat"><span>الزمن</span><b>${r.time}</b></div>
+      <div class="stat"><span>الزمن</span><b>${dash(r.time)}</b></div>
     </div>
     <div class="tbl"><table><thead><tr><th>الصبة</th><th>الماء</th><th>الحرارة</th><th>التدفق</th><th>النمط</th><th>التوقف بعدها</th></tr></thead><tbody>${rows}</tbody></table></div>
     <ul class="notes">${notes.map(n=>`<li>${n}</li>`).join("")}</ul>
-    <div class="actions"><button class="primary" id="copyLink" type="button">انسخ رابط الوصفة</button><button id="copyText" type="button">انسخ الوصفة كنص</button></div>
+    <div class="actions"><button class="primary" id="copyLink" type="button">انسخ رابط الوصفة</button><button id="copyText" type="button">انسخ الوصفة كنص</button>${r.xb?`<a class="btn" href="${r.xb}" target="_blank" rel="noopener">افتح في تطبيق xBloom</a>`:""}</div>
     <div class="toast" id="toast"></div>
     <textarea id="copybox" hidden readonly></textarea>`;
-  const text = [r.name, r.subtitle, `البن ${r.dose} g · الطحن ${r.grind} · ${r.rpm} RPM`, `الماء ${water} ml${r.ice?` · الثلج ${r.ice} g`:""} · الزمن ${r.time}`,
-    ...r.pours.map((p,i)=>`${i===0?"Bloom":"صبة "+(i+1)}: ${p[0]} ml · ${p[1]}° · تدفق ${p[2]} · ${p[3]} · توقف ${p[4]} s`), ...notes].join("\n");
+  const text = [r.name, r.subtitle, `البن ${r.dose} g · الطحن ${r.grind} · ${r.rpm==null?"—":r.rpm+" RPM"}`, `الماء ${water} ml${r.ice?` · الثلج ${r.ice} g`:""} · الزمن ${dash(r.time)}`,
+    ...r.pours.map((p,i)=>`${i===0?"Bloom":"صبة "+(i+1)}: ${p[0]} ml · ${p[1]}° · تدفق ${dash(p[2])} · ${dash(p[3])} · توقف ${p[4]} s`), ...notes, ...(r.xb?["افتح في xBloom: "+r.xb]:[])].join("\n");
   const link = (BASE || location.href.split("#")[0]) + "#" + key;
   $("#copyLink").onclick = () => copy(link, "نُسخ الرابط");
   $("#copyText").onclick = () => copy(text, "نُسخت الوصفة");
