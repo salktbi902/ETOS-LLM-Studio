@@ -60,13 +60,17 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .saved a:hover,.saved a:focus-visible{border-color:var(--accent)}
 .saved small{color:var(--muted)}
 #copybox{width:100%;min-height:80px;font:13px var(--mono);direction:ltr;background:var(--chip);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px}
+.sources{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+.sources summary{cursor:pointer;font-weight:600}
+.sources ul{margin:8px 0 0;padding-inline-start:18px;display:flex;flex-direction:column;gap:6px;color:var(--muted);font-size:.88rem}
+.sources a{color:var(--accent)}
 @media (prefers-reduced-motion:no-preference){.seg label,button{transition:background .15s,border-color .15s}}
 </style>
 
 <div class="wrap" dir="rtl">
   <header>
     <h1>وصفات xBloom السريعة</h1>
-    <p class="sub">اختر نوع البن، وتطلع لك وصفة جاهزة لـ xBloom Studio مع رابط تشاركه.</p>
+    <p class="sub">اختر نوع البن، وتطلع لك وصفة جاهزة لـ xBloom Studio مع رابط تشاركه. القواعد مبنية على مواصفات xBloom الرسمية وأدلة Studio المنشورة.</p>
   </header>
 
   <section class="panel" id="controls" aria-label="خيارات الوصفة">
@@ -97,6 +101,17 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
       <a href="#super-fruit"><span>سوبرر فروت 🧊 v2</span><small>فاتح إلى متوسط · فاكهي</small></a>
     </div>
   </section>
+
+  <details class="sources">
+    <summary>من وين جت القواعد</summary>
+    <ul>
+      <li><a href="https://xbloom.com/products/xbloom-studio" target="_blank" rel="noopener">مواصفات xBloom Studio</a>: التدفق من 3.0 إلى 3.5 ml/s، و80 درجة طحن (الرقم الأعلى أخشن)، والطاحونة من 60 إلى 120 RPM.</li>
+      <li><a href="https://xbloom.com/blogs/news/bean-to-cup-pourover-explained" target="_blank" rel="noopener">مدونة xBloom</a>: سرعة طاحونة أقل للتحميص الفاتح عشان العطر، وأعلى للغامق.</li>
+      <li><a href="https://xbloom.com/blogs/news/iced-coffee-brewing-methods" target="_blank" rel="noopener">طرق xBloom للقهوة المثلجة</a>: نسبة 1:15، يعني 190 ml ماء حار و110 g ثلج لكل 20 g بن، وطحن أنعم شوي من الحار.</li>
+      <li><a href="https://thebasicbarista.com/en-us/blogs/article/how-to-dial-in-your-xbloom-studio-using-copilot-mode" target="_blank" rel="noopener">The Basic Barista</a>: الحرارة حسب التحميص، ونسبة 1:16 للحار، وتصحيح الطحن من 3 إلى 5 درجات.</li>
+      <li><a href="https://thebasicbarista.com/en-us/blogs/article/xbloom-studio-grind-size-guide" target="_blank" rel="noopener">دليل الطحن من The Basic Barista</a> و<a href="https://clarkst.coffee/blogs/home-brewing/xbloom-studio-brew-guide" target="_blank" rel="noopener">Clarkst</a>: كل ما زادت الصبات يخشن الطحن، من 40 لثلاث صبات إلى 55–63 لست صبات، على قمع Omni.</li>
+    </ul>
+  </details>
 </div>
 
 <script>
@@ -109,7 +124,7 @@ const PRESETS = {
     name:"هولي كانولي", style:"iced", subtitle:"Bones Coffee Company · تحميص متوسط منكّه",
     dose:20, grind:59, rpm:60, ice:150, time:"2:40 – 3:00",
     pours:[[40,88,3.5,"حلزوني",35],[55,88,3.5,"حلزوني",20],[45,88,3.5,"حلزوني",15],[30,88,3.5,"حلزوني",0]],
-    notes:["البطاقة الأصلية تقول تدفق 8.5، والمعتمد هنا 3.5 لأنه نطاق xBloom المعتاد.","حامضة أو خفيفة: الطحن 59 ← 57. مرّة: 59 ← 61."]
+    notes:["البطاقة الأصلية تقول تدفق 8.5، وهذا خارج قدرة المكينة (من 3.0 إلى 3.5 ml/s حسب مواصفات xBloom). المعتمد هنا 3.5.","حامضة أو خلصت قبل 2:40: الطحن 59 ← 56. مرّة أو تجاوزت 3:00: 59 ← 62."]
   },
   "super-fruit": {
     name:"سوبرر فروت v2", style:"iced", subtitle:"فاتح إلى متوسط · فاكهي",
@@ -121,13 +136,17 @@ const PRESETS = {
 
 function generate(style, roast, dose, flav){
   const iced = style === "iced";
-  let temp = {light:93, medium:90, dark:86}[roast] - (flav ? 2 : 0);
-  let grind = {light:54, medium:57, dark:60}[roast] + (iced ? -1 : 0);
-  const rpm = {light:100, medium:80, dark:60}[roast];
+  // الحرارة: فاتح 92–95، متوسط 90–93، غامق 88–92 (The Basic Barista). المثلّج أعلى بدرجة (xBloom: 93–96).
+  const temp = Math.min(95, {light:94, medium:91, dark:88}[roast] + (iced ? 1 : 0) - (flav ? 2 : 0));
+  // الطحن: وصفة 4 صبات حوالي 45 على قمع Omni، يخشن درجة لكل 2.5 g فوق 15 g، والمثلّج أنعم بدرجتين.
+  const grind = {light:43, medium:46, dark:49}[roast] + Math.round((dose - 15) / 2.5) - (iced ? 2 : 0);
+  // السرعة: أقل للفاتح وأعلى للغامق (xBloom).
+  const rpm = {light:70, medium:90, dark:110}[roast];
   const bloomPause = {light:40, medium:35, dark:30}[roast];
-  const water = Math.round(dose * (iced ? 8.5 : 16) / 5) * 5;
-  const ice = iced ? Math.round(dose * 16 - water) : 0;
-  const bloom = dose * 2;
+  // الماء: الحار 1:16. المثلّج 1:9.5 ماء حار و1:5.5 ثلج، والمجموع 1:15 (xBloom).
+  const water = Math.round(dose * (iced ? 9.5 : 16) / 5) * 5;
+  const ice = iced ? Math.round(dose * 5.5 / 5) * 5 : 0;
+  const bloom = Math.round(dose * (iced ? 2 : 3) / 5) * 5;
   const rest = water - bloom;
   const split = iced ? [0.4, 0.35] : [0.36, 0.34];
   const p2 = Math.round(rest*split[0]/5)*5, p3 = Math.round(rest*split[1]/5)*5, p4 = rest - p2 - p3;
@@ -135,17 +154,18 @@ function generate(style, roast, dose, flav){
     [bloom, temp, 3.0, "حلزوني", bloomPause],
     [p2, temp, 3.5, "حلزوني", 20],
     [p3, temp, 3.5, "حلزوني", 15],
-    [p4, temp - (roast === "light" ? 1 : 0), 3.5, "دائري", 0]
+    [p4, temp, 3.5, "دائري", 0]
   ];
-  const fine = grind - 2, coarse = grind + 2;
+  const fine = grind - 3, coarse = grind + 3;
   return {
     name: (iced ? "مثلّجة" : "حارّة") + " · " + RN[roast] + (flav ? " منكّه" : ""),
     style, subtitle: "وصفة مولّدة · " + dose + " g بن",
-    dose, grind, rpm, ice, time: iced ? "2:20 – 2:50" : "2:45 – 3:15", pours,
+    dose, grind, rpm, ice, time: iced ? "2:20 – 2:50" : "2:30 – 3:30", pours,
     notes: [
-      "حامضة أو خفيفة: الطحن " + grind + " ← " + fine + ". مرّة أو قابضة: " + grind + " ← " + coarse + ".",
+      "حامضة أو سريعة: الطحن " + grind + " ← " + fine + ". مرّة أو بطيئة: " + grind + " ← " + coarse + ".",
       iced ? "ضع " + ice + " g ثلج في الكوب قبل البدء، وحرّك بعد التحضير حتى يذوب." : "سخّن الكوب قبل التحضير.",
-      "اهتزاز بعد الـ Bloom فقط. غيّر متغيرًا واحدًا في كل تجربة."
+      "ناقصها حلاوة: ارفع الطاحونة إلى " + Math.min(120, rpm + 20) + " RPM. غيّر متغيرًا واحدًا في كل تجربة.",
+      "اهتزاز بعد الـ Bloom فقط."
     ]
   };
 }
@@ -154,6 +174,7 @@ function render(r, key){
   const water = r.pours.reduce((a,p)=>a+p[0],0);
   const ratio = (water / r.dose).toFixed(1);
   const total = ((water + (r.ice||0)) / r.dose).toFixed(0);
+  const notes = r.dose > 18 ? [...r.notes, r.dose + " g فوق المدى الموصى به رسميًا (من 5 إلى 18 g). يشتغل في التطبيق، بس راقب القمع لا يفيض."] : r.notes;
   const rows = r.pours.map((p,i)=>`<tr><td>${i===0?"Bloom":"صبة "+(i+1)}</td><td class="n">${p[0]} ml</td><td class="n">${p[1]}°</td><td class="n">${p[2].toFixed(1)}</td><td>${p[3]}</td><td class="n">${p[4]} s</td></tr>`).join("");
   $("#recipe").innerHTML = `
     <div class="card-head"><div><h2>${r.name}</h2><p class="sub">${r.subtitle}</p></div>
@@ -168,12 +189,12 @@ function render(r, key){
       <div class="stat"><span>الزمن</span><b>${r.time}</b></div>
     </div>
     <div class="tbl"><table><thead><tr><th>الصبة</th><th>الماء</th><th>الحرارة</th><th>التدفق</th><th>النمط</th><th>التوقف بعدها</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <ul class="notes">${r.notes.map(n=>`<li>${n}</li>`).join("")}</ul>
+    <ul class="notes">${notes.map(n=>`<li>${n}</li>`).join("")}</ul>
     <div class="actions"><button class="primary" id="copyLink" type="button">انسخ رابط الوصفة</button><button id="copyText" type="button">انسخ الوصفة كنص</button></div>
     <div class="toast" id="toast"></div>
     <textarea id="copybox" hidden readonly></textarea>`;
   const text = [r.name, r.subtitle, `البن ${r.dose} g · الطحن ${r.grind} · ${r.rpm} RPM`, `الماء ${water} ml${r.ice?` · الثلج ${r.ice} g`:""} · الزمن ${r.time}`,
-    ...r.pours.map((p,i)=>`${i===0?"Bloom":"صبة "+(i+1)}: ${p[0]} ml · ${p[1]}° · تدفق ${p[2]} · ${p[3]} · توقف ${p[4]} s`), ...r.notes].join("\n");
+    ...r.pours.map((p,i)=>`${i===0?"Bloom":"صبة "+(i+1)}: ${p[0]} ml · ${p[1]}° · تدفق ${p[2]} · ${p[3]} · توقف ${p[4]} s`), ...notes].join("\n");
   const link = (BASE || location.href.split("#")[0]) + "#" + key;
   $("#copyLink").onclick = () => copy(link, "نُسخ الرابط");
   $("#copyText").onclick = () => copy(text, "نُسخت الوصفة");
