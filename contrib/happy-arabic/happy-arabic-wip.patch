@@ -1,0 +1,140 @@
+diff --git a/packages/happy-android/app/src/main/kotlin/com/slopus/happy/model/settings/Languages.kt b/packages/happy-android/app/src/main/kotlin/com/slopus/happy/model/settings/Languages.kt
+index 5726dd6..ba27bc2 100644
+--- a/packages/happy-android/app/src/main/kotlin/com/slopus/happy/model/settings/Languages.kt
++++ b/packages/happy-android/app/src/main/kotlin/com/slopus/happy/model/settings/Languages.kt
+@@ -21,6 +21,7 @@ object Languages {
+         Language("zh-Hans", "中文(简体)", "Chinese (Simplified)"),
+         Language("zh-Hant", "中文(繁體)", "Chinese (Traditional)"),
+         Language("ja", "日本語", "Japanese"),
++        Language("ar", "العربية", "Arabic"),
+     )
+ 
+     const val DEFAULT = "en"
+diff --git a/packages/happy-android/tools/translations/generate.mjs b/packages/happy-android/tools/translations/generate.mjs
+index 73f8abf..b1aef8c 100644
+--- a/packages/happy-android/tools/translations/generate.mjs
++++ b/packages/happy-android/tools/translations/generate.mjs
+@@ -66,6 +66,7 @@ const languages = [
+     ['zh-Hans', 'zh-Hans.json', 'zhHans', 'values-b+zh+Hans', 'none'],
+     ['zh-Hant', 'zh-Hant.json', 'zhHant', 'values-b+zh+Hant', 'none'],
+     ['ja', 'ja.json', 'ja', 'values-ja', 'none'],
++    ['ar', 'ar.json', 'ar', 'values-ar', 'ar'],
+ ];
+ 
+ // Android's (CLDR's) plural rules for integers, by the categories each
+@@ -99,6 +100,18 @@ const rules = {
+             return 'many';
+         },
+     },
++    ar: {
++        categories: ['zero', 'one', 'two', 'few', 'many', 'other'],
++        select: (n) => {
++            const n100 = n % 100;
++            if (n === 0) return 'zero';
++            if (n === 1) return 'one';
++            if (n === 2) return 'two';
++            if (n100 >= 3 && n100 <= 10) return 'few';
++            if (n100 >= 11 && n100 <= 99) return 'many';
++            return 'other';
++        },
++    },
+     none: { categories: ['other'], select: () => 'other' },
+ };
+ 
+diff --git a/packages/happy-i18n/catalogs.mjs b/packages/happy-i18n/catalogs.mjs
+index 1738972..be03587 100644
+--- a/packages/happy-i18n/catalogs.mjs
++++ b/packages/happy-i18n/catalogs.mjs
+@@ -1,6 +1,6 @@
+ import { readFileSync } from 'node:fs';
+ 
+-export const languages = ['en', 'ru', 'pl', 'es', 'it', 'pt', 'ca', 'zh-Hans', 'zh-Hant', 'ja'];
++export const languages = ['en', 'ru', 'pl', 'es', 'it', 'pt', 'ca', 'zh-Hans', 'zh-Hant', 'ja', 'ar'];
+ export const parameters = JSON.parse(readFileSync(new URL('./translations/parameters.json', import.meta.url), 'utf8'));
+ 
+ export function readCatalog(code) {
+@@ -20,6 +20,14 @@ function pluralCategory(kind, value) {
+         if (n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) return 'few';
+         return 'many';
+     }
++    if (kind === 'plural-ar') {
++        if (n === 0) return 'zero';
++        if (n === 1) return 'one';
++        if (n === 2) return 'two';
++        if (n100 >= 3 && n100 <= 10) return 'few';
++        if (n100 >= 11 && n100 <= 99) return 'many';
++        return 'other';
++    }
+     return value === 1 ? 'one' : 'other';
+ }
+ 
+diff --git a/packages/happy-i18n/catalogs.test.mjs b/packages/happy-i18n/catalogs.test.mjs
+index 0ef0051..2a2b0a0 100644
+--- a/packages/happy-i18n/catalogs.test.mjs
++++ b/packages/happy-i18n/catalogs.test.mjs
+@@ -45,6 +45,10 @@ test('plural categories, exact counts, choices and interpolation', () => {
+     const polish = { ...russian, k: 'plural-pl' };
+     assert.equal(render(polish, { count: 21 }), '21 many');
+     assert.equal(render(polish, { count: 22 }), '22 few');
++    const arabic = { p: 'count', k: 'plural-ar', c: { zero: 'zero', one: 'one', two: 'two', few: '${count} few', many: '${count} many', other: '${count} other' } };
++    for (const [count, expected] of [[0, 'zero'], [1, 'one'], [2, 'two'], [3, '3 few'], [10, '10 few'], [11, '11 many'], [99, '99 many'], [100, '100 other'], [102, '102 other'], [103, '103 few'], [111, '111 many'], [1001, '1001 other'], [-3, '-3 few']]) {
++        assert.equal(render(arabic, { count }), expected);
++    }
+     const choice = { p: 'enabled', k: 'bool', c: { true: '${name} on', false: '${name} off' } };
+     assert.equal(render(choice, { enabled: false, name: '${count} 100% <β>' }), '${count} 100% <β> off');
+     assert.throws(() => render({ t: '${missing}' }, {}), /Missing translation argument/);
+diff --git a/packages/happy-ios/Sources/HappyCore/Localization/TranslationCatalog.swift b/packages/happy-ios/Sources/HappyCore/Localization/TranslationCatalog.swift
+index cea243b..0b19d65 100644
+--- a/packages/happy-ios/Sources/HappyCore/Localization/TranslationCatalog.swift
++++ b/packages/happy-ios/Sources/HappyCore/Localization/TranslationCatalog.swift
+@@ -33,6 +33,8 @@ public final class TranslationCatalog: Sendable {
+         case russian
+         /// Polish: one (exactly 1), few (…2-4 but not …12-14), many.
+         case polish
++        /// Arabic (CLDR): zero, one, two, few (…03-…10), many (…11-…99), other.
++        case arabic
+ 
+         /// ru.ts's and pl.ts's `Math.abs(count)` is taken as a magnitude:
+         /// `abs` would trap on `Int.min`.
+@@ -49,6 +51,13 @@ public final class TranslationCatalog: Sendable {
+                 if n == 1 { return "one" }
+                 if (2...4).contains(n10) && (n100 < 12 || n100 > 14) { return "few" }
+                 return "many"
++            case .arabic:
++                if n == 0 { return "zero" }
++                if n == 1 { return "one" }
++                if n == 2 { return "two" }
++                if (3...10).contains(n100) { return "few" }
++                if (11...99).contains(n100) { return "many" }
++                return "other"
+             }
+         }
+     }
+@@ -119,6 +128,7 @@ public final class TranslationCatalog: Sendable {
+                     case "plural": .oneOther
+                     case "plural-ru": .russian
+                     case "plural-pl": .polish
++                    case "plural-ar": .arabic
+                     default: nil
+                     }
+                     let exact = (entry["x"] as? [String: String] ?? [:]).reduce(into: [Int: Template]()) { result, item in
+@@ -153,6 +163,7 @@ public final class TranslationCatalog: Sendable {
+         switch language {
+         case "ru": PluralRule.russian.category(count)
+         case "pl": PluralRule.polish.category(count)
++        case "ar": PluralRule.arabic.category(count)
+         case "ja", "zh-Hans", "zh-Hant": "other"
+         default: PluralRule.oneOther.category(count)
+         }
+diff --git a/packages/happy-ios/Sources/HappyCore/Settings/AppLanguage.swift b/packages/happy-ios/Sources/HappyCore/Settings/AppLanguage.swift
+index 2566221..24737a6 100644
+--- a/packages/happy-ios/Sources/HappyCore/Settings/AppLanguage.swift
++++ b/packages/happy-ios/Sources/HappyCore/Settings/AppLanguage.swift
+@@ -20,6 +20,7 @@ public enum AppLanguage {
+         Language(code: "zh-Hans", nativeName: "中文(简体)"),
+         Language(code: "zh-Hant", nativeName: "中文(繁體)"),
+         Language(code: "ja", nativeName: "日本語"),
++        Language(code: "ar", nativeName: "العربية"),
+     ]
+ 
+     public static func nativeName(_ code: String) -> String? {
